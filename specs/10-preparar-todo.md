@@ -1,6 +1,6 @@
 # SPEC 10 — Preparar todo y retoque visual
 
-> **Estado:** Borrador
+> **Estado:** Approved
 > **Depende de:** SPEC 04, SPEC 08
 > **Fecha:** 2026-10-19
 > **Objetivo:** Permitir preparar (`git add -A`) y quitar de staged (`git reset`) todos los cambios con un solo clic, y dar a la interfaz un retoque ligero de color basado en el logo, sin cambiar su estructura.
