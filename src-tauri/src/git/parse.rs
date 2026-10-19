@@ -1,5 +1,5 @@
 use super::error::GitError;
-use super::types::{ChangeKind, ChangedFile, CommitNode, RepositoryStatus};
+use super::types::{ChangeKind, ChangedFile, CommitDetail, CommitNode, RepositoryStatus};
 
 fn parse_error(what: &str, record: &str) -> GitError {
     GitError::internal(format!("Salida de Git inesperada ({what}): {record:?}"))
@@ -132,6 +132,41 @@ pub fn parse_log(output: &[u8]) -> Result<Vec<CommitNode>, GitError> {
     Ok(commits)
 }
 
+/// Formato de `git log -1` que consume `parse_commit_detail`.
+pub const DETAIL_FORMAT: &str =
+    "--format=%H%x00%h%x00%P%x00%an%x00%aI%x00%s%x00%D%x00%cn%x00%cI%x00%b";
+
+fn split_refs(decorations: &str) -> Vec<String> {
+    if decorations.is_empty() {
+        Vec::new()
+    } else {
+        decorations.split(", ").map(str::to_string).collect()
+    }
+}
+
+/// Parsea la salida de `git log -1` con `DETAIL_FORMAT`.
+pub fn parse_commit_detail(output: &[u8]) -> Result<CommitDetail, GitError> {
+    let text = String::from_utf8_lossy(output);
+    let fields: Vec<&str> = text.splitn(10, '\0').collect();
+    if fields.len() != 10 {
+        return Err(parse_error("detalle de commit", &text));
+    }
+    Ok(CommitDetail {
+        commit: CommitNode {
+            oid: fields[0].to_string(),
+            short_oid: fields[1].to_string(),
+            parents: fields[2].split_whitespace().map(str::to_string).collect(),
+            author: fields[3].to_string(),
+            authored_at: fields[4].to_string(),
+            subject: fields[5].to_string(),
+            refs: split_refs(fields[6]),
+        },
+        committer: fields[7].to_string(),
+        committed_at: fields[8].to_string(),
+        body: fields[9].trim_end().to_string(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -199,5 +234,20 @@ bbb\x00bbb1\x00\x00Luis\x002026-01-01T00:00:00+00:00\x00Inicio\x00\x1e\n";
     #[test]
     fn parses_empty_log() {
         assert!(parse_log(b"").unwrap().is_empty());
+    }
+
+    #[test]
+    fn parses_commit_detail_with_multiline_body() {
+        let out = "aaa\x00aaa1\x00bbb\x00Ana\x002026-01-02T03:04:05+00:00\x00Asunto\x00HEAD -> refs/heads/main\x00Luis\x002026-01-03T00:00:00+00:00\x00Línea 1\n\nLínea <b>3</b>\n";
+        let detail = parse_commit_detail(out.as_bytes()).unwrap();
+        assert_eq!(detail.commit.subject, "Asunto");
+        assert_eq!(detail.committer, "Luis");
+        assert_eq!(detail.body, "Línea 1\n\nLínea <b>3</b>");
+        assert_eq!(detail.commit.refs, vec!["HEAD -> refs/heads/main"]);
+    }
+
+    #[test]
+    fn rejects_truncated_detail() {
+        assert!(parse_commit_detail(b"aaa\x00bbb").is_err());
     }
 }

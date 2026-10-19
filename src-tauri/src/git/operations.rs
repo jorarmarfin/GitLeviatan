@@ -1,9 +1,9 @@
 use std::path::Path;
 
 use super::error::GitError;
-use super::parse::{parse_log, parse_status, LOG_FORMAT};
+use super::parse::{parse_commit_detail, parse_log, parse_status, DETAIL_FORMAT, LOG_FORMAT};
 use super::process::run_git;
-use super::types::{CommitPage, RepositoryStatus};
+use super::types::{CommitDetail, CommitPage, RepositoryStatus};
 
 pub const MAX_PAGE_SIZE: usize = 500;
 
@@ -34,6 +34,7 @@ pub fn list_commits(
             "--exclude=refs/stash",
             "--all",
             "--topo-order",
+            "--decorate=full",
             &format!("--skip={skip}"),
             &format!("--max-count={}", limit + 1),
             LOG_FORMAT,
@@ -51,6 +52,32 @@ pub fn list_commits(
         commits,
         next_cursor,
     })
+}
+
+fn is_valid_oid(oid: &str) -> bool {
+    (4..=64).contains(&oid.len()) && oid.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+/// Detalle de un commit. `oid` se valida como hexadecimal para que nunca se
+/// interprete como una opción de Git.
+pub fn get_commit(repo: &Path, oid: &str) -> Result<CommitDetail, GitError> {
+    if !is_valid_oid(oid) {
+        return Err(GitError::invalid_input(format!(
+            "Identificador de commit inválido: {oid}"
+        )));
+    }
+    let out = run_git(
+        repo,
+        [
+            "log",
+            "-1",
+            "--decorate=full",
+            DETAIL_FORMAT,
+            "--end-of-options",
+            oid,
+        ],
+    )?;
+    parse_commit_detail(&out.stdout)
 }
 
 #[cfg(test)]
@@ -181,5 +208,90 @@ mod tests {
     fn rejects_invalid_cursor() {
         let repo = init_repo();
         assert!(list_commits(repo.path(), Some("abc"), 10).is_err());
+    }
+
+    #[test]
+    fn get_commit_returns_body_and_refs() {
+        let repo = init_repo();
+        git(
+            repo.path(),
+            &[
+                "commit",
+                "-q",
+                "--allow-empty",
+                "-m",
+                "Asunto",
+                "-m",
+                "Cuerpo <i>html</i>",
+            ],
+        );
+        let page = list_commits(repo.path(), None, 10).unwrap();
+        let oid = &page.commits[0].oid;
+        let detail = get_commit(repo.path(), oid).unwrap();
+        assert_eq!(detail.commit.subject, "Asunto");
+        assert_eq!(detail.body, "Cuerpo <i>html</i>");
+        assert_eq!(detail.committer, "Prueba");
+        assert!(detail
+            .commit
+            .refs
+            .contains(&"HEAD -> refs/heads/main".to_string()));
+    }
+
+    #[test]
+    fn get_commit_rejects_option_like_and_unknown_oids() {
+        let repo = init_repo();
+        git(repo.path(), &["commit", "-q", "--allow-empty", "-m", "uno"]);
+        assert_eq!(
+            get_commit(repo.path(), "--output=/tmp/x").unwrap_err().kind,
+            crate::git::error::GitErrorKind::InvalidInput
+        );
+        assert!(get_commit(repo.path(), "deadbeefdeadbeef").is_err());
+    }
+
+    #[test]
+    fn commits_use_full_ref_names() {
+        let repo = init_repo();
+        git(repo.path(), &["commit", "-q", "--allow-empty", "-m", "uno"]);
+        git(repo.path(), &["tag", "v1"]);
+        let page = list_commits(repo.path(), None, 10).unwrap();
+        let refs = &page.commits[0].refs;
+        assert!(refs.contains(&"HEAD -> refs/heads/main".to_string()));
+        assert!(refs.contains(&"tag: refs/tags/v1".to_string()));
+    }
+
+    /// Medición manual (no corre en CI):
+    /// `GL_PERF_REPO=<ruta> cargo test --release perf_list_commits -- --ignored --nocapture`
+    #[test]
+    #[ignore = "medición manual; ver docs/performance.md"]
+    fn perf_list_commits() {
+        let Ok(path) = std::env::var("GL_PERF_REPO") else {
+            return;
+        };
+        let repo = Path::new(&path);
+        let total: usize = String::from_utf8_lossy(
+            &run_git(repo, ["rev-list", "--all", "--count"])
+                .unwrap()
+                .stdout,
+        )
+        .trim()
+        .parse()
+        .unwrap();
+
+        let measure = |label: &str, cursor: Option<String>| {
+            let started = std::time::Instant::now();
+            let page = list_commits(repo, cursor.as_deref(), 500).unwrap();
+            println!(
+                "PERF commits={total} {label}: {:?} ({} filas)",
+                started.elapsed(),
+                page.commits.len()
+            );
+        };
+        measure("primera página", None);
+        measure("página media", Some((total / 2).to_string()));
+        measure("última página", Some(total.saturating_sub(500).to_string()));
+
+        let started = std::time::Instant::now();
+        get_status(repo).unwrap();
+        println!("PERF commits={total} get_status: {:?}", started.elapsed());
     }
 }

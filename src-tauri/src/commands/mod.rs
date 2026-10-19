@@ -7,7 +7,9 @@ use tauri::{AppHandle, Manager, State};
 use crate::git::error::GitError;
 use crate::git::operations;
 use crate::git::repository::{self, Repositories};
-use crate::git::types::{CommitPage, RecentRepository, RepositoryRef, RepositoryStatus};
+use crate::git::types::{
+    CommitDetail, CommitPage, RecentRepository, RepositoryRef, RepositoryStatus,
+};
 use crate::storage::recent::RecentStore;
 
 /// Comando de prueba para validar el puente `invoke()` Rust ↔ React.
@@ -82,6 +84,16 @@ pub async fn list_commits(
 ) -> Result<CommitPage, GitError> {
     let path = repositories.path(&repository_id)?;
     blocking(move || operations::list_commits(&path, cursor.as_deref(), limit)).await
+}
+
+#[tauri::command]
+pub async fn get_commit(
+    repositories: State<'_, Repositories>,
+    repository_id: String,
+    oid: String,
+) -> Result<CommitDetail, GitError> {
+    let path = repositories.path(&repository_id)?;
+    blocking(move || operations::get_commit(&path, &oid)).await
 }
 
 #[cfg(test)]

@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
+import type { CommitDetail } from "@/features/graph/types";
 import type {
   CommitPage,
   GitErrorPayload,
@@ -21,6 +22,8 @@ export const api = {
   openRepository: (path: string) => invoke<RepositoryRef>("open_repository", { path }),
   listRecentRepositories: () => invoke<RecentRepository[]>("list_recent_repositories"),
   getStatus: (repositoryId: string) => invoke<RepositoryStatus>("get_status", { repositoryId }),
+  getCommit: (repositoryId: string, oid: string) =>
+    invoke<CommitDetail>("get_commit", { repositoryId, oid }),
   listCommits: (repositoryId: string, cursor: string | null, limit: number) =>
     invoke<CommitPage>("list_commits", { repositoryId, cursor, limit }),
 };

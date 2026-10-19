@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 
+import logo from "@/assets/logo.png";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { CommitList } from "@/features/commits/CommitList";
 import { OpenRepositoryButton } from "@/features/repositories/OpenRepositoryButton";
 import { RecentRepositories } from "@/features/repositories/RecentRepositories";
-import { StatusPanel } from "@/features/status/StatusPanel";
 import { ping } from "@/lib/ping";
+import { Workspace } from "@/app/Workspace";
 import { useRepositoryStore } from "@/stores/repository";
 
 export function App() {
@@ -22,6 +22,7 @@ export function App() {
   return (
     <div className="flex h-screen flex-col">
       <header className="flex items-center gap-4 border-b border-border px-4 py-2">
+        <img src={logo} alt="" className="size-8" />
         <h1 className="text-lg font-semibold">GitLeviatán</h1>
         <span className="truncate text-sm text-muted-foreground" title={active?.path}>
           {active ? active.name : "Ningún repositorio abierto"}
@@ -45,19 +46,14 @@ export function App() {
         <aside className="overflow-y-auto border-r border-border p-2">
           <RecentRepositories />
         </aside>
-        <main className="overflow-y-auto">
-          {active ? (
-            <CommitList key={active.id} repository={active} />
-          ) : (
-            <p className="p-6 text-muted-foreground">
-              Abre un repositorio para ver su historial. <br />
-              El poder de Git, bajo tu control.
-            </p>
-          )}
-        </main>
-        <aside className="overflow-y-auto border-l border-border" aria-label="Cambios">
-          {active && <StatusPanel key={active.id} repository={active} />}
-        </aside>
+        {active ? (
+          <Workspace key={active.id} repository={active} />
+        ) : (
+          <main className="col-span-2 p-6 text-muted-foreground">
+            Abre un repositorio para ver su historial. <br />
+            El poder de Git, bajo tu control.
+          </main>
+        )}
       </div>
 
       <footer className="border-t border-border px-4 py-1 text-xs text-muted-foreground">

@@ -52,6 +52,16 @@ pub struct CommitNode {
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+pub struct CommitDetail {
+    #[serde(flatten)]
+    pub commit: CommitNode,
+    pub body: String,
+    pub committer: String,
+    pub committed_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct CommitPage {
     pub commits: Vec<CommitNode>,
     pub next_cursor: Option<String>,

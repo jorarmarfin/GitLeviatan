@@ -1,6 +1,6 @@
 # SPEC 03 — Grafo de commits y ramas
 
-> **Estado:** Approved
+> **Estado:** Implemented
 > **Depende de:** SPEC 02
 > **Fecha:** 2026-10-19
 > **Objetivo:** Mostrar el historial como un grafo SVG con carriles, merges y etiquetas de referencias, con selección de commits y detalle, sin bloquear la UI en historiales grandes.
@@ -38,6 +38,7 @@ type GraphEdge = {
   fromLane: number;
   toLane: number;
   kind: "straight" | "merge" | "fork";
+  colorIndex: number;  // color del carril al que pertenece el segmento
 };
 
 type GraphRow = {
@@ -62,6 +63,8 @@ Convenciones:
 
 - `layout.ts` expone `computeGraphRows(commits, state)` y devuelve `{ rows, state }`; `state` permite continuar con la siguiente página.
 - Orden de entrada: `--topo-order` de `git log --all`, como en SPEC 02.
+- `git log` se ejecuta con `--decorate=full`, de modo que `%D` trae `refs/heads/…`, `refs/remotes/…` y `tag: refs/tags/…`; así una rama local con barra (`feature/x`) no se confunde con una remota.
+- Significado de `kind`: `straight` atraviesa la fila en su carril; `fork` llega desde arriba hasta el nodo; `merge` sale del nodo hacia el carril de un padre.
 - Comando nuevo: `get_commit(repositoryId, oid) -> CommitDetail`.
 - Mensajes de commit siempre como texto, nunca HTML.
 

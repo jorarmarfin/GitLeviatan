@@ -13,6 +13,7 @@ pub fn run() {
             commands::list_recent_repositories,
             commands::get_status,
             commands::list_commits,
+            commands::get_commit,
         ])
         .run(tauri::generate_context!())
         .expect("error al ejecutar la aplicación Tauri");
