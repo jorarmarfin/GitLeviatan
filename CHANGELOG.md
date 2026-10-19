@@ -4,23 +4,11 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y 
 [SemVer](https://semver.org/lang/es/). El workflow de release usa la sección `## [X.Y.Z]` del tag
 como notas de la versión.
 
-## [Sin publicar]
+## [0.1.0] - 2026-10-19
 
-### Añadido
-
-- Soporte para Windows y macOS (SPEC 09): matriz de CI con las tres plataformas, instalador NSIS (`.exe`)
-  y `.dmg` universal en el workflow de release, sin firmar. Ver `docs/platforms.md`.
-- Detección de Git por plataforma: Preferencias → `PATH` → sitios habituales (Git for Windows, Homebrew).
-- Windows: Git sin ventanas de consola, cancelación de todo el árbol de procesos y rutas largas.
-- `.gitattributes` con finales de línea LF en todas las plataformas.
-
-### Corregido
-
-- Con `core.autocrlf=true` el visor de diff ya no marca todas las líneas como cambiadas.
-
-## [0.1.0] - Pendiente de publicar
-
-Primera release candidata del MVP para Ubuntu.
+Primera versión del MVP: Ubuntu (`.deb` y AppImage), Windows (instalador NSIS) y macOS (`.dmg` universal).
+Los instaladores de Windows y macOS **no están firmados**; Windows y macOS se verifican en CI pero
+la verificación manual en equipos reales sigue pendiente (ver `docs/platforms.md`).
 
 ### Añadido
 
@@ -39,6 +27,16 @@ Primera release candidata del MVP para Ubuntu.
 - Auditoría de dependencias en CI (`cargo audit`, `cargo deny`, `pnpm audit`, licencias) (SPEC 08).
 - Prueba E2E del flujo abrir → stage → commit → historial con `tauri-driver` (SPEC 08).
 - Paquetes `.deb` y AppImage (SPEC 08).
+- Soporte para Windows y macOS (SPEC 09): matriz de CI con las tres plataformas, instalador NSIS (`.exe`)
+  y `.dmg` universal en el workflow de release, sin firmar. Ver `docs/platforms.md`.
+- Detección de Git por plataforma: Preferencias → `PATH` → sitios habituales (Git for Windows, Homebrew).
+- Windows: Git sin ventanas de consola, cancelación de todo el árbol de procesos y rutas largas.
+- `.gitattributes` con finales de línea LF en todas las plataformas.
+
+### Corregido
+
+- Con `core.autocrlf=true` el visor de diff ya no marca todas las líneas como cambiadas.
+- En Windows se rechazan las rutas con raíz (`/etc/passwd`, `\x`) que antes podían salir del repositorio.
 
 ### Cambiado
 
