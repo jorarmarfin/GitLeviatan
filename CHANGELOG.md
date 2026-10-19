@@ -4,7 +4,10 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y 
 [SemVer](https://semver.org/lang/es/). El workflow de release usa la sección `## [X.Y.Z]` del tag
 como notas de la versión.
 
-## [Sin publicar]
+## [0.2.0] - 2026-10-19
+
+Preparar y quitar todo con un clic, y un retoque visual con la paleta del logo. Los instaladores de Windows y
+macOS siguen **sin firmar** y su verificación manual en equipos reales sigue pendiente (ver `docs/platforms.md`).
 
 ### Añadido
 

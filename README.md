@@ -7,7 +7,7 @@
 
 Licencia / License: [GPL-3.0-or-later](LICENSE)
 
-> Estado / Status: release candidata del MVP (v0.1.0): Ubuntu verificado; Windows y macOS en CI, verificación manual pendiente. / MVP release candidate (v0.1.0): Ubuntu verified; Windows and macOS built in CI, manual verification pending.
+> Estado / Status: v0.2.0: Ubuntu verificado; Windows y macOS compilan y pasan los tests en CI, verificación manual pendiente. / v0.2.0: Ubuntu verified; Windows and macOS build and pass tests in CI, manual verification pending.
 > Ver el [CHANGELOG](CHANGELOG.md). / See the [CHANGELOG](CHANGELOG.md).
 
 ---
