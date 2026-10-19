@@ -1,1 +1,3 @@
-//! Preferencias y repositorios recientes. Se implementa en specs posteriores.
+//! Persistencia local de la aplicación.
+
+pub mod recent;

@@ -1,6 +1,6 @@
 # SPEC 03 — Grafo de commits y ramas
 
-> **Estado:** Borrador
+> **Estado:** Approved
 > **Depende de:** SPEC 02
 > **Fecha:** 2026-10-19
 > **Objetivo:** Mostrar el historial como un grafo SVG con carriles, merges y etiquetas de referencias, con selección de commits y detalle, sin bloquear la UI en historiales grandes.

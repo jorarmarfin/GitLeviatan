@@ -1,6 +1,6 @@
 # SPEC 02 — Lectura: abrir repositorio, estado e historial
 
-> **Estado:** Approved
+> **Estado:** Implemented
 > **Depende de:** SPEC 01
 > **Fecha:** 2026-10-19
 > **Objetivo:** Permitir abrir un repositorio local, recordar los recientes y mostrar su estado de cambios y su historial de commits en una lista paginada, leyendo todo con el Git CLI instalado.
