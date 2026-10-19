@@ -1,6 +1,6 @@
 # SPEC 12 — Cambiar de rama, fusionar y recordar el último proyecto
 
-> **Estado:** Approved
+> **Estado:** Implemented
 > **Depende de:** SPEC 05, SPEC 07, SPEC 11
 > **Fecha:** 2026-10-19
 > **Objetivo:** Hacer cómodo el cambio de rama con un selector con búsqueda, permitir fusionar una rama en la rama actual con una vista previa y una política segura ante conflictos, y abrir automáticamente el último proyecto al iniciar la app.
