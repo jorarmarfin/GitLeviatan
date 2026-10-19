@@ -7,7 +7,7 @@ use std::sync::{Mutex, RwLock};
 
 use super::error::AppError;
 
-/// Ejecutable de Git elegido en las preferencias; `None` = buscar `git` en el `PATH`.
+/// Ejecutable de Git elegido en las preferencias; `None` = buscarlo (ver `resolve_git`).
 static GIT_PATH: RwLock<Option<PathBuf>> = RwLock::new(None);
 
 /// Cambia el ejecutable de Git; afecta a las operaciones siguientes sin reiniciar.
@@ -15,31 +15,111 @@ pub fn set_git_path(path: Option<PathBuf>) {
     *GIT_PATH.write().expect("ruta de Git envenenada") = path;
 }
 
-fn git_program() -> OsString {
-    match GIT_PATH.read().expect("ruta de Git envenenada").as_ref() {
-        Some(path) => path.clone().into_os_string(),
-        None => OsString::from("git"),
+/// Nombre del ejecutable de Git en el `PATH`.
+const GIT_FILE: &str = if cfg!(windows) { "git.exe" } else { "git" };
+
+/// Sitios habituales de Git cuando no está en el `PATH`. Una app abierta desde el Finder de
+/// macOS o desde un lanzador de Linux recibe un `PATH` mínimo, sin Homebrew ni `/usr/local`.
+fn well_known_git_locations() -> Vec<PathBuf> {
+    let mut found: Vec<PathBuf> = Vec::new();
+    if cfg!(windows) {
+        for variable in ["ProgramFiles", "ProgramFiles(x86)", "ProgramW6432"] {
+            if let Some(base) = std::env::var_os(variable) {
+                found.push(PathBuf::from(base).join("Git").join("cmd").join(GIT_FILE));
+            }
+        }
+        if let Some(base) = std::env::var_os("LOCALAPPDATA") {
+            found.push(
+                PathBuf::from(base)
+                    .join("Programs")
+                    .join("Git")
+                    .join("cmd")
+                    .join(GIT_FILE),
+            );
+        }
+    } else if cfg!(target_os = "macos") {
+        found.extend(
+            [
+                "/opt/homebrew/bin/git",
+                "/usr/local/bin/git",
+                "/usr/bin/git",
+            ]
+            .map(PathBuf::from),
+        );
+    } else {
+        found.extend(["/usr/local/bin/git", "/usr/bin/git"].map(PathBuf::from));
     }
+    found
 }
 
+/// Busca un ejecutable por nombre en una lista de directorios (formato del `PATH`).
+fn find_in(path_env: Option<&OsStr>, name: &str) -> Option<PathBuf> {
+    std::env::split_paths(path_env?)
+        .map(|dir| dir.join(name))
+        .find(|candidate| candidate.is_file())
+}
+
+/// Decide qué ejecutar: la ruta de las preferencias; si no, `git` del `PATH`; si no, el primer
+/// Git de los sitios habituales; y, como último recurso, `git` (el error dirá que falta).
+fn resolve_git(configured: Option<&Path>, path_env: Option<&OsStr>, known: &[PathBuf]) -> OsString {
+    if let Some(path) = configured {
+        return path.as_os_str().to_owned();
+    }
+    if find_in(path_env, GIT_FILE).is_some() {
+        return OsString::from("git");
+    }
+    known
+        .iter()
+        .find(|candidate| candidate.is_file())
+        .map_or_else(|| OsString::from("git"), |p| p.as_os_str().to_owned())
+}
+
+fn git_program() -> OsString {
+    let configured = GIT_PATH.read().expect("ruta de Git envenenada").clone();
+    resolve_git(
+        configured.as_deref(),
+        std::env::var_os("PATH").as_deref(),
+        &well_known_git_locations(),
+    )
+}
+
+/// En Windows una app gráfica que lanza `git.exe` abriría una ventana de consola por proceso.
+#[cfg(windows)]
+fn hide_window(command: &mut Command) {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(windows))]
+fn hide_window(_command: &mut Command) {}
+
 fn git_command() -> Command {
-    Command::new(git_program())
+    let mut command = Command::new(git_program());
+    hide_window(&mut command);
+    // Las rutas de más de 260 caracteres solo funcionan en Windows con esta opción.
+    #[cfg(windows)]
+    command.args(["-c", "core.longpaths=true"]);
+    command
 }
 
 /// Busca un ejecutable por nombre en el `PATH` (apoyo de las pruebas).
 #[cfg(test)]
 pub fn find_in_path(name: &str) -> Option<PathBuf> {
-    let paths = std::env::var_os("PATH")?;
-    std::env::split_paths(&paths)
-        .map(|dir| dir.join(name))
-        .find(|candidate| candidate.is_file())
+    // En Windows los ejecutables llevan `.exe`: `git` → `git.exe`.
+    let file = format!("{name}{}", std::env::consts::EXE_SUFFIX);
+    find_in(std::env::var_os("PATH").as_deref(), &file)
 }
 
 /// Ejecuta `<git> --version` y devuelve la versión (`2.43.0`). Con `None` usa la ruta
-/// configurada actualmente (o el `PATH`).
+/// configurada actualmente (o la que `resolve_git` encuentre).
 pub fn check_git(program: Option<&Path>) -> Result<String, AppError> {
     let mut command = match program {
-        Some(path) => Command::new(path),
+        Some(path) => {
+            let mut command = Command::new(path);
+            hide_window(&mut command);
+            command
+        }
         None => git_command(),
     };
     let output = command
@@ -181,6 +261,17 @@ fn kill_tree(child: &mut Child) {
         unsafe {
             libc::kill(-(child.id() as libc::pid_t), libc::SIGKILL);
         }
+    }
+    #[cfg(windows)]
+    {
+        // `/T` termina también a los procesos hijos (ssh, git-remote-https…).
+        let mut taskkill = Command::new("taskkill");
+        taskkill
+            .args(["/PID", &child.id().to_string(), "/T", "/F"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        hide_window(&mut taskkill);
+        let _ = taskkill.status();
     }
     let _ = child.kill();
 }
@@ -336,6 +427,88 @@ mod tests {
         assert!(String::from_utf8_lossy(&out.stdout).starts_with("git version"));
         set_git_path(None);
         assert_eq!(git_program(), OsString::from("git"));
+    }
+
+    fn fake_git_in(dir: &Path) -> PathBuf {
+        let file = dir.join(GIT_FILE);
+        std::fs::write(&file, "").unwrap();
+        file
+    }
+
+    #[test]
+    fn resolve_prefers_the_configured_path_over_everything() {
+        let dir = tempfile::tempdir().unwrap();
+        fake_git_in(dir.path());
+        let configured = Path::new("/elegido/por/el/usuario/git");
+        let path_env = std::env::join_paths([dir.path()]).unwrap();
+        let resolved = resolve_git(Some(configured), Some(path_env.as_os_str()), &[]);
+        assert_eq!(resolved, configured.as_os_str());
+    }
+
+    #[test]
+    fn resolve_uses_plain_git_when_it_is_in_the_path() {
+        let dir = tempfile::tempdir().unwrap();
+        fake_git_in(dir.path());
+        let path_env = std::env::join_paths([dir.path()]).unwrap();
+        let known = [PathBuf::from("/otro/git")];
+        assert_eq!(
+            resolve_git(None, Some(path_env.as_os_str()), &known),
+            OsString::from("git")
+        );
+    }
+
+    #[test]
+    fn resolve_falls_back_to_well_known_locations_when_path_has_no_git() {
+        // Caso típico de macOS: app abierta desde el Finder con un PATH mínimo.
+        let empty_path_dir = tempfile::tempdir().unwrap();
+        let homebrew = tempfile::tempdir().unwrap();
+        let installed = fake_git_in(homebrew.path());
+        let path_env = std::env::join_paths([empty_path_dir.path()]).unwrap();
+        let known = [
+            homebrew.path().join("no-existe").join(GIT_FILE),
+            installed.clone(),
+        ];
+        assert_eq!(
+            resolve_git(None, Some(path_env.as_os_str()), &known),
+            installed.into_os_string()
+        );
+    }
+
+    #[test]
+    fn resolve_gives_plain_git_when_nothing_is_found() {
+        let dir = tempfile::tempdir().unwrap();
+        let path_env = std::env::join_paths([dir.path()]).unwrap();
+        let known = [dir.path().join("fantasma").join(GIT_FILE)];
+        assert_eq!(
+            resolve_git(None, Some(path_env.as_os_str()), &known),
+            OsString::from("git")
+        );
+        assert_eq!(resolve_git(None, None, &[]), OsString::from("git"));
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn macos_knows_homebrew_locations() {
+        let known = well_known_git_locations();
+        assert!(known.contains(&PathBuf::from("/opt/homebrew/bin/git")));
+        assert!(known.contains(&PathBuf::from("/usr/local/bin/git")));
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn windows_looks_for_git_exe_under_program_files() {
+        assert_eq!(GIT_FILE, "git.exe");
+        let known = well_known_git_locations();
+        assert!(known
+            .iter()
+            .all(|p| p.ends_with(Path::new("cmd").join("git.exe"))));
+        assert!(!known.is_empty());
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn linux_knows_usr_bin() {
+        assert!(well_known_git_locations().contains(&PathBuf::from("/usr/bin/git")));
     }
 
     #[test]

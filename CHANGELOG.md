@@ -4,6 +4,20 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y 
 [SemVer](https://semver.org/lang/es/). El workflow de release usa la sección `## [X.Y.Z]` del tag
 como notas de la versión.
 
+## [Sin publicar]
+
+### Añadido
+
+- Soporte para Windows y macOS (SPEC 09): matriz de CI con las tres plataformas, instalador NSIS (`.exe`)
+  y `.dmg` universal en el workflow de release, sin firmar. Ver `docs/platforms.md`.
+- Detección de Git por plataforma: Preferencias → `PATH` → sitios habituales (Git for Windows, Homebrew).
+- Windows: Git sin ventanas de consola, cancelación de todo el árbol de procesos y rutas largas.
+- `.gitattributes` con finales de línea LF en todas las plataformas.
+
+### Corregido
+
+- Con `core.autocrlf=true` el visor de diff ya no marca todas las líneas como cambiadas.
+
 ## [0.1.0] - Pendiente de publicar
 
 Primera release candidata del MVP para Ubuntu.

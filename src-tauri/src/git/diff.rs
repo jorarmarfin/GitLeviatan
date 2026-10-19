@@ -93,6 +93,35 @@ fn read_worktree(repo: &Path, path: &str) -> Result<Side, AppError> {
     })
 }
 
+/// `core.autocrlf=true` (el valor por defecto de Git para Windows) guarda LF en el índice pero
+/// deja CRLF en el working tree. Sin esto el visor mostraría todas las líneas como cambiadas.
+fn autocrlf_converts(repo: &Path) -> bool {
+    run_git(repo, ["config", "--get", "core.autocrlf"])
+        .map(|out| {
+            matches!(
+                String::from_utf8_lossy(&out.stdout).trim(),
+                "true" | "input"
+            )
+        })
+        .unwrap_or(false)
+}
+
+/// Quita el `\r` de los `\r\n` del working tree cuando la versión de comparación usa LF.
+/// Solo se aplica con `core.autocrlf`: sin él, un cambio de finales de línea es un cambio real.
+fn align_line_endings(original: &[u8], modified: Vec<u8>) -> Vec<u8> {
+    if original.contains(&b'\r') || !modified.windows(2).any(|pair| pair == b"\r\n") {
+        return modified;
+    }
+    let mut out = Vec::with_capacity(modified.len());
+    for (i, byte) in modified.iter().enumerate() {
+        if *byte == b'\r' && modified.get(i + 1) == Some(&b'\n') {
+            continue;
+        }
+        out.push(*byte);
+    }
+    out
+}
+
 fn looks_binary(bytes: &[u8]) -> bool {
     bytes.iter().take(BINARY_SNIFF_BYTES).any(|b| *b == 0)
 }
@@ -135,6 +164,11 @@ pub fn get_diff(repo: &Path, path: &str, scope: DiffScope) -> Result<FileDiff, A
         diff.is_binary = true;
         return Ok(diff);
     }
+    let modified = if scope == DiffScope::Unstaged && autocrlf_converts(repo) {
+        align_line_endings(&original, modified)
+    } else {
+        modified
+    };
     diff.original = String::from_utf8_lossy(&original).into_owned();
     diff.modified = String::from_utf8_lossy(&modified).into_owned();
     Ok(diff)
@@ -145,6 +179,62 @@ mod tests {
     use super::*;
     use crate::git::testutil::{commit_file, git, init_repo};
     use crate::git::write::stage_files;
+
+    fn autocrlf_repo() -> tempfile::TempDir {
+        let repo = init_repo();
+        git(repo.path(), &["config", "core.autocrlf", "true"]);
+        // Working tree con CRLF, como en Windows; el índice guarda LF.
+        std::fs::write(repo.path().join("a.txt"), "uno\r\ndos\r\ntres\r\n").unwrap();
+        git(repo.path(), &["add", "--", "a.txt"]);
+        git(repo.path(), &["commit", "-q", "-m", "inicial"]);
+        repo
+    }
+
+    #[test]
+    fn autocrlf_does_not_show_every_line_as_changed() {
+        let repo = autocrlf_repo();
+        std::fs::write(repo.path().join("a.txt"), "uno\r\nCAMBIADA\r\ntres\r\n").unwrap();
+
+        let diff = get_diff(repo.path(), "a.txt", DiffScope::Unstaged).unwrap();
+        assert_eq!(diff.original, "uno\ndos\ntres\n");
+        assert_eq!(diff.modified, "uno\nCAMBIADA\ntres\n");
+    }
+
+    #[test]
+    fn without_autocrlf_a_line_ending_change_is_a_real_change() {
+        let repo = init_repo();
+        commit_file(repo.path(), "a.txt", "uno\ndos\n", "inicial");
+        std::fs::write(repo.path().join("a.txt"), "uno\r\ndos\r\n").unwrap();
+
+        let diff = get_diff(repo.path(), "a.txt", DiffScope::Unstaged).unwrap();
+        assert_eq!(diff.original, "uno\ndos\n");
+        assert_eq!(diff.modified, "uno\r\ndos\r\n");
+    }
+
+    #[test]
+    fn files_that_really_use_crlf_keep_them() {
+        let repo = init_repo();
+        commit_file(repo.path(), "a.txt", "uno\r\ndos\r\n", "con CRLF");
+        git(repo.path(), &["config", "core.autocrlf", "true"]);
+        std::fs::write(repo.path().join("a.txt"), "uno\r\nTRES\r\n").unwrap();
+
+        let diff = get_diff(repo.path(), "a.txt", DiffScope::Unstaged).unwrap();
+        assert_eq!(diff.original, "uno\r\ndos\r\n");
+        assert_eq!(diff.modified, "uno\r\nTRES\r\n");
+    }
+
+    #[test]
+    fn align_line_endings_only_touches_crlf_pairs() {
+        assert_eq!(
+            align_line_endings(b"a\nb\n", b"a\r\nb\r\n".to_vec()),
+            b"a\nb\n"
+        );
+        assert_eq!(
+            align_line_endings(b"a\nb\n", b"a\rb\r\n".to_vec()),
+            b"a\rb\n"
+        );
+        assert_eq!(align_line_endings(b"a\r\n", b"a\r\n".to_vec()), b"a\r\n");
+    }
 
     #[test]
     fn unstaged_modification_shows_index_and_worktree() {

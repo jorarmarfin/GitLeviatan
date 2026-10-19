@@ -1,0 +1,9 @@
+# Finales de línea LF en el repositorio y en el working tree de todas las plataformas.
+# Sin esto, Windows (core.autocrlf=true) convierte a CRLF y `prettier --check` y `rustfmt --check` fallan.
+* text=auto eol=lf
+
+# Binarios: nunca se tocan.
+*.png binary
+*.ico binary
+*.icns binary
+*.webp binary
