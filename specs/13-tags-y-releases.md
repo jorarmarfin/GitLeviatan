@@ -1,6 +1,6 @@
 # SPEC 13 — Rama desde cualquier punto, tags y releases con tag
 
-> **Estado:** Approved
+> **Estado:** Implemented
 > **Depende de:** SPEC 03, SPEC 05, SPEC 06, SPEC 12
 > **Fecha:** 2026-10-19
 > **Objetivo:** Permitir crear una rama desde cualquier punto del historial, crear y gestionar tags locales y remotos, y publicar una release como un tag anotado subido al remoto.
