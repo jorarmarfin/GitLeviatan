@@ -1,6 +1,6 @@
 # SPEC 09 — Soporte para Windows y macOS
 
-> **Estado:** Borrador
+> **Estado:** Approved
 > **Depende de:** SPEC 08
 > **Fecha:** 2026-10-19
 > **Objetivo:** Compilar, probar y empaquetar GitLeviatán en Windows y macOS con los mismos criterios de calidad que en Ubuntu.
