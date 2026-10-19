@@ -48,6 +48,38 @@ La app no tiene código de credenciales propio: lo hace Git.
 - **Consola:** en Windows, Git se lanza sin abrir ventanas de consola. Cancelar una operación termina todo el
   árbol de procesos (`taskkill /T`).
 
+## Compilar los paquetes en tu máquina
+
+Cada sistema genera los paquetes de su propia plataforma (no se puede crear el `.exe` desde Linux).
+
+| Sistema | Comando                                  | Resultado                                                              |
+| ------- | ---------------------------------------- | ---------------------------------------------------------------------- |
+| Linux   | `scripts/build.sh --bundle`              | `src-tauri/target/release/bundle/deb/*.deb` y `appimage/*.AppImage`    |
+| macOS   | `scripts/build.sh --bundle`              | `src-tauri/target/release/bundle/dmg/*.dmg`                            |
+| Windows | `scripts/build.sh --bundle` (Git Bash)   | `src-tauri\target\release\bundle\nsis\*-setup.exe` (instalador NSIS)   |
+| Windows | `scripts\build-windows.ps1` (PowerShell) | `dist-installer\GitLeviatan_<versión>_x64-inno-setup.exe` (Inno Setup) |
+
+`scripts/build.sh` sin opciones solo compila el binario. Opciones: `--check` (lint, formato y tests antes),
+`--bundle` (paquetes del sistema actual) e `--inno` (solo Windows desde Git Bash: delega en el script de PowerShell).
+
+### Instalador con Inno Setup (Windows)
+
+`scripts/build-windows.ps1` compila con `pnpm tauri build --no-bundle` y empaqueta el `.exe` con
+`installer/windows/gitleviatan.iss`. Requisitos: Node 24+, pnpm 10+, Rust (toolchain `msvc` y Visual Studio Build
+Tools con la carga «Desarrollo para el escritorio con C++»), Git for Windows e
+[Inno Setup](https://jrsoftware.org/isdl.php) 6.3 o superior (el script busca `ISCC.exe` en el `PATH` y en
+`Archivos de programa`).
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\build-windows.ps1          # compila y empaqueta
+powershell -ExecutionPolicy Bypass -File scripts\build-windows.ps1 -Check   # además lint y tests
+powershell -ExecutionPolicy Bypass -File scripts\build-windows.ps1 -SkipBuild  # solo reempaqueta
+```
+
+El instalador se instala por usuario (sin pedir administrador), avisa si falta WebView2 y está en español e
+inglés. **El script y el `.iss` aún no se han ejecutado en Windows**: si algo falla, es lo primero que hay que revisar.
+El instalador oficial de las releases sigue siendo el NSIS que genera el CI; el de Inno Setup es para uso local.
+
 ## Paquetes sin firmar
 
 - **Windows (SmartScreen):** «Windows protegió su PC» → **Más información** → **Ejecutar de todas formas**.

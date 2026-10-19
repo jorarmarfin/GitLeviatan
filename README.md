@@ -77,6 +77,7 @@ pnpm lint && pnpm test  # frontend
 cargo test --manifest-path src-tauri/Cargo.toml  # Rust
 pnpm tauri build --no-bundle                     # compila sin empaquetar
 pnpm tauri build                                 # genera .deb y AppImage en src-tauri/target/release/bundle/
+scripts/build.sh --bundle                        # igual, y detecta el SO (Linux: deb+AppImage · macOS: dmg · Windows/Git Bash: NSIS)
 pnpm e2e                                         # E2E (ver docs/e2e.md)
 ```
 
@@ -138,6 +139,7 @@ pnpm lint && pnpm test  # frontend
 cargo test --manifest-path src-tauri/Cargo.toml  # Rust
 pnpm tauri build --no-bundle                     # build without packaging
 pnpm tauri build                                 # .deb and AppImage in src-tauri/target/release/bundle/
+scripts/build.sh --bundle                        # same, picks the OS (Linux: deb+AppImage · macOS: dmg · Windows/Git Bash: NSIS)
 pnpm e2e                                         # E2E (see docs/e2e.md)
 ```
 

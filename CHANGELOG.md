@@ -4,6 +4,16 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y 
 [SemVer](https://semver.org/lang/es/). El workflow de release usa la sección `## [X.Y.Z]` del tag
 como notas de la versión.
 
+## [Sin publicar]
+
+### Añadido
+
+- `scripts/build.sh --bundle` genera los paquetes del sistema actual (Linux: `.deb` y AppImage; macOS: `.dmg`;
+  Windows desde Git Bash: NSIS).
+- `scripts/build-windows.ps1` e `installer/windows/gitleviatan.iss`: instalador de Windows con Inno Setup
+  para uso local (sin ejecutar todavía en Windows). Ver `docs/platforms.md`.
+- Borrador de la SPEC 10: preparar y quitar todo, y retoque visual de color basado en el logo.
+
 ## [0.1.0] - 2026-10-19
 
 Primera versión del MVP: Ubuntu (`.deb` y AppImage), Windows (instalador NSIS) y macOS (`.dmg` universal).
