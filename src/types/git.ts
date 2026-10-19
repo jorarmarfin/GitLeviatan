@@ -1,3 +1,5 @@
+import type { ThemePreference } from "@/types/theme";
+
 // Espejo de las structs Rust (serde, camelCase). Mantener sincronizado con src-tauri/src/git/types.rs.
 
 export type RepositoryRef = { id: string; path: string; name: string };
@@ -64,3 +66,13 @@ export type SyncErrorKind =
 
 /** Fallo de fetch/pull/push/clone, ya clasificado por el backend. */
 export type SyncFailure = { kind: SyncErrorKind; message: string; detail: string | null };
+
+/** Espejo de `storage/settings.rs`. */
+export type Settings = {
+  version: 1;
+  theme: ThemePreference;
+  gitPath: string | null; // null = buscar en el PATH
+  maxRecentRepositories: number; // 5–50
+};
+
+export type GitInfo = { available: boolean; version: string | null; message: string | null };

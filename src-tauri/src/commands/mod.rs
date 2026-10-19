@@ -1,6 +1,7 @@
 //! Frontera pública de Tauri: cada comando expuesto al frontend vive aquí.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -8,6 +9,7 @@ use crate::git::branches;
 use crate::git::diff;
 use crate::git::error::GitError;
 use crate::git::operations;
+use crate::git::process::{check_git, set_git_path};
 use crate::git::remotes;
 use crate::git::repository::{self, Repositories};
 use crate::git::sync::{self, Operations, SyncContext};
@@ -18,6 +20,7 @@ use crate::git::types::{
 };
 use crate::git::write;
 use crate::storage::recent::RecentStore;
+use crate::storage::settings::{Settings, SettingsStore};
 
 /// Comando de prueba para validar el puente `invoke()` Rust ↔ React.
 #[tauri::command]
@@ -36,33 +39,67 @@ where
         .map_err(|error| GitError::internal(error.to_string()))?
 }
 
-fn recent_store(app: &AppHandle) -> Result<RecentStore, GitError> {
-    let dir = app
-        .path()
+/// Preferencias en memoria más el archivo donde se persisten. Un único escritor.
+pub struct SettingsState {
+    store: SettingsStore,
+    current: Mutex<Settings>,
+}
+
+impl SettingsState {
+    /// Lee `settings.json` (recuperándolo si está corrupto) y aplica la ruta de Git.
+    pub fn load(config_dir: PathBuf) -> Self {
+        let store = SettingsStore::new(config_dir.join("settings.json"));
+        let current = store.load();
+        set_git_path(current.git_path.clone().map(PathBuf::from));
+        Self {
+            store,
+            current: Mutex::new(current),
+        }
+    }
+
+    fn get(&self) -> Settings {
+        self.current
+            .lock()
+            .expect("preferencias envenenadas")
+            .clone()
+    }
+}
+
+fn config_dir(app: &AppHandle) -> Result<PathBuf, GitError> {
+    app.path()
         .app_config_dir()
-        .map_err(|error| GitError::internal(error.to_string()))?;
-    Ok(RecentStore::new(dir.join("recent.json")))
+        .map_err(|error| GitError::internal(error.to_string()))
+}
+
+fn recent_store(app: &AppHandle, settings: &SettingsState) -> Result<RecentStore, GitError> {
+    let limit = settings.get().max_recent_repositories as usize;
+    Ok(RecentStore::new(
+        config_dir(app)?.join("recent.json"),
+        limit,
+    ))
 }
 
 #[tauri::command]
 pub async fn open_repository(
     app: AppHandle,
     repositories: State<'_, Repositories>,
+    settings: State<'_, SettingsState>,
     path: String,
 ) -> Result<RepositoryRef, GitError> {
-    open_path(&app, &repositories, path).await
+    open_path(&app, &repositories, &settings, path).await
 }
 
 async fn open_path(
     app: &AppHandle,
     repositories: &Repositories,
+    settings: &SettingsState,
     path: String,
 ) -> Result<RepositoryRef, GitError> {
     let top = blocking(move || repository::resolve_toplevel(Path::new(&path))).await?;
     let repo = repositories.register(top);
 
     // Fallar al guardar recientes no debe impedir abrir el repositorio.
-    if let Ok(store) = recent_store(app) {
+    if let Ok(store) = recent_store(app, settings) {
         let entry = RecentRepository {
             path: repo.path.clone(),
             name: repo.name.clone(),
@@ -76,9 +113,76 @@ async fn open_path(
 }
 
 #[tauri::command]
-pub async fn list_recent_repositories(app: AppHandle) -> Result<Vec<RecentRepository>, GitError> {
-    let store = recent_store(&app)?;
+pub async fn list_recent_repositories(
+    app: AppHandle,
+    settings: State<'_, SettingsState>,
+) -> Result<Vec<RecentRepository>, GitError> {
+    let store = recent_store(&app, &settings)?;
     blocking(move || Ok(store.load())).await
+}
+
+#[tauri::command]
+pub async fn clear_recent_repositories(
+    app: AppHandle,
+    settings: State<'_, SettingsState>,
+) -> Result<(), GitError> {
+    let store = recent_store(&app, &settings)?;
+    blocking(move || store.clear().map_err(GitError::io)).await
+}
+
+#[tauri::command]
+pub fn get_settings(settings: State<'_, SettingsState>) -> Settings {
+    settings.get()
+}
+
+/// Valida y guarda las preferencias. Si algo no es válido (rango, ruta de Git) no se
+/// guarda nada. Una ruta de Git nueva se aplica a las operaciones siguientes.
+#[tauri::command]
+pub async fn update_settings(
+    app: AppHandle,
+    settings: State<'_, SettingsState>,
+    new_settings: Settings,
+) -> Result<Settings, GitError> {
+    let validated = blocking(move || new_settings.validated()).await?;
+    let mut current = settings.current.lock().expect("preferencias envenenadas");
+    settings.store.save(&validated).map_err(GitError::io)?;
+    set_git_path(validated.git_path.clone().map(PathBuf::from));
+    *current = validated.clone();
+    drop(current);
+
+    // Si bajó el límite, la lista de recientes se recorta de inmediato.
+    if let Ok(store) = recent_store(&app, &settings) {
+        if let Err(error) = store.enforce_limit() {
+            eprintln!("no se pudo recortar recent.json: {error}");
+        }
+    }
+    Ok(validated)
+}
+
+/// Resultado de buscar Git con la configuración actual.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitInfo {
+    pub available: bool,
+    pub version: Option<String>,
+    pub message: Option<String>,
+}
+
+#[tauri::command]
+pub async fn detect_git() -> GitInfo {
+    let result = blocking(|| check_git(None)).await;
+    match result {
+        Ok(version) => GitInfo {
+            available: true,
+            version: Some(version),
+            message: None,
+        },
+        Err(error) => GitInfo {
+            available: false,
+            version: None,
+            message: Some(error.message),
+        },
+    }
 }
 
 #[tauri::command]
@@ -281,12 +385,13 @@ pub async fn clone_repository(
     app: AppHandle,
     repositories: State<'_, Repositories>,
     operations: State<'_, Operations>,
+    settings: State<'_, SettingsState>,
     url: String,
     dest_dir: String,
 ) -> Result<RepositoryRef, SyncError> {
     let dest = std::path::PathBuf::from(&dest_dir);
     run_sync(&app, &operations, move |ctx| sync::clone(&url, &dest, ctx)).await?;
-    Ok(open_path(&app, &repositories, dest_dir).await?)
+    Ok(open_path(&app, &repositories, &settings, dest_dir).await?)
 }
 
 /// Cancela una operación en curso; no falla si ya terminó.

@@ -7,7 +7,6 @@ use serde::{Deserialize, Serialize};
 use crate::git::types::RecentRepository;
 
 const VERSION: u32 = 1;
-pub const MAX_RECENT: usize = 20;
 
 #[derive(Serialize, Deserialize)]
 struct RecentFile {
@@ -18,11 +17,13 @@ struct RecentFile {
 /// Repositorios recientes en `recent.json` (versionado, escritura atómica).
 pub struct RecentStore {
     path: PathBuf,
+    /// Cuántos repositorios se conservan (preferencia `maxRecentRepositories`).
+    limit: usize,
 }
 
 impl RecentStore {
-    pub fn new(path: PathBuf) -> Self {
-        Self { path }
+    pub fn new(path: PathBuf, limit: usize) -> Self {
+        Self { path, limit }
     }
 
     /// Un archivo ausente, corrupto o de otra versión se trata como lista vacía.
@@ -40,14 +41,32 @@ impl RecentStore {
         let mut list = self.load();
         list.retain(|r| r.path != repository.path);
         list.insert(0, repository);
-        list.truncate(MAX_RECENT);
+        list.truncate(self.limit);
+        self.write(list)
+    }
 
+    /// Vacía la lista y persiste el cambio.
+    pub fn clear(&self) -> io::Result<()> {
+        self.write(Vec::new())
+    }
+
+    /// Recorta la lista al límite actual (p. ej. tras bajarlo en preferencias).
+    pub fn enforce_limit(&self) -> io::Result<()> {
+        let mut list = self.load();
+        if list.len() <= self.limit {
+            return Ok(());
+        }
+        list.truncate(self.limit);
+        self.write(list)
+    }
+
+    fn write(&self, repositories: Vec<RecentRepository>) -> io::Result<()> {
         if let Some(parent) = self.path.parent() {
             fs::create_dir_all(parent)?;
         }
         let file = RecentFile {
             version: VERSION,
-            repositories: list,
+            repositories,
         };
         let json = serde_json::to_string_pretty(&file).map_err(io::Error::other)?;
         let tmp = self.path.with_extension("json.tmp");
@@ -68,10 +87,14 @@ mod tests {
         }
     }
 
-    fn store() -> (tempfile::TempDir, RecentStore) {
+    fn store_with(limit: usize) -> (tempfile::TempDir, RecentStore) {
         let dir = tempfile::tempdir().unwrap();
-        let store = RecentStore::new(dir.path().join("cfg").join("recent.json"));
+        let store = RecentStore::new(dir.path().join("cfg").join("recent.json"), limit);
         (dir, store)
+    }
+
+    fn store() -> (tempfile::TempDir, RecentStore) {
+        store_with(20)
     }
 
     #[test]
@@ -91,8 +114,40 @@ mod tests {
             store.record(repo(n)).unwrap();
         }
         let list = store.load();
-        assert_eq!(list.len(), MAX_RECENT);
+        assert_eq!(list.len(), 20);
         assert_eq!(list[0].path, "/repos/24");
+    }
+
+    #[test]
+    fn respects_a_custom_limit() {
+        let (_dir, store) = store_with(5);
+        for n in 0..8 {
+            store.record(repo(n)).unwrap();
+        }
+        assert_eq!(store.load().len(), 5);
+    }
+
+    #[test]
+    fn enforce_limit_trims_existing_list() {
+        let (dir, store) = store_with(20);
+        for n in 0..10 {
+            store.record(repo(n)).unwrap();
+        }
+        let smaller = RecentStore::new(dir.path().join("cfg").join("recent.json"), 6);
+        smaller.enforce_limit().unwrap();
+        let list = smaller.load();
+        assert_eq!(list.len(), 6);
+        assert_eq!(list[0].path, "/repos/9");
+    }
+
+    #[test]
+    fn clear_empties_and_persists() {
+        let (dir, store) = store();
+        store.record(repo(1)).unwrap();
+        store.clear().unwrap();
+        assert!(store.load().is_empty());
+        let again = RecentStore::new(dir.path().join("cfg").join("recent.json"), 20);
+        assert!(again.load().is_empty());
     }
 
     #[test]

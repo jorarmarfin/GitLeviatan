@@ -8,10 +8,12 @@ import type {
   DiffScope,
   FileDiff,
   GitErrorPayload,
+  GitInfo,
   RecentRepository,
   RemoteInfo,
   RepositoryRef,
   RepositoryStatus,
+  Settings,
   SyncErrorKind,
   SyncFailure,
 } from "@/types/git";
@@ -57,6 +59,10 @@ export function syncFailure(error: unknown): SyncFailure {
 export const api = {
   openRepository: (path: string) => invoke<RepositoryRef>("open_repository", { path }),
   listRecentRepositories: () => invoke<RecentRepository[]>("list_recent_repositories"),
+  clearRecentRepositories: () => invoke<void>("clear_recent_repositories"),
+  getSettings: () => invoke<Settings>("get_settings"),
+  updateSettings: (newSettings: Settings) => invoke<Settings>("update_settings", { newSettings }),
+  detectGit: () => invoke<GitInfo>("detect_git"),
   getStatus: (repositoryId: string) => invoke<RepositoryStatus>("get_status", { repositoryId }),
   getCommit: (repositoryId: string, oid: string) =>
     invoke<CommitDetail>("get_commit", { repositoryId, oid }),

@@ -8,6 +8,12 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(git::repository::Repositories::default())
         .manage(git::sync::Operations::default())
+        .setup(|app| {
+            use tauri::Manager;
+            let dir = app.path().app_config_dir()?;
+            app.manage(commands::SettingsState::load(dir));
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             commands::ping,
             commands::open_repository,
@@ -23,6 +29,10 @@ pub fn run() {
             commands::create_branch,
             commands::checkout_branch,
             commands::delete_branch,
+            commands::clear_recent_repositories,
+            commands::get_settings,
+            commands::update_settings,
+            commands::detect_git,
             commands::list_remotes,
             commands::fetch,
             commands::pull,
