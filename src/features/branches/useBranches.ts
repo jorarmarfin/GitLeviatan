@@ -55,11 +55,6 @@ export function useBranches(
     (branch: string) => run(() => api.checkoutBranch(repository.id, branch)),
     [repository.id, run],
   );
-  const create = useCallback(
-    (name: string, startPoint: string | null) =>
-      run(() => api.createBranch(repository.id, name, startPoint)),
-    [repository.id, run],
-  );
 
   /** Devuelve el resultado, o `null` si falló (el error queda en `error`). */
   const remove = useCallback(
@@ -83,5 +78,5 @@ export function useBranches(
 
   const clearError = useCallback(() => setError(null), []);
 
-  return { branches, loadError, busy, error, clearError, checkout, create, remove };
+  return { branches, loadError, busy, error, clearError, checkout, remove };
 }

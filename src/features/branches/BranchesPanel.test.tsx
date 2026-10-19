@@ -14,6 +14,8 @@ vi.mock("@/lib/api", async (importOriginal) => {
     api: {
       ...original.api,
       listBranches: vi.fn(),
+      listTags: vi.fn(),
+      resolveRef: vi.fn(),
       createBranch: vi.fn(),
       checkoutBranch: vi.fn(),
       deleteBranch: vi.fn(),
@@ -45,6 +47,10 @@ const branches: BranchInfo[] = [
 
 beforeEach(() => {
   vi.mocked(api.listBranches).mockReset().mockResolvedValue(branches);
+  vi.mocked(api.listTags).mockReset().mockResolvedValue([]);
+  vi.mocked(api.resolveRef)
+    .mockReset()
+    .mockImplementation(async (_id, expr) => `oid-${expr}`);
   vi.mocked(api.createBranch).mockReset().mockResolvedValue(undefined);
   vi.mocked(api.checkoutBranch).mockReset().mockResolvedValue(undefined);
   vi.mocked(api.deleteBranch).mockReset().mockResolvedValue({ status: "deleted" });
@@ -152,6 +158,99 @@ describe("BranchesPanel", () => {
       expect(api.createBranch).toHaveBeenCalledWith("repo-1", "desde-commit", "c".repeat(40));
     });
 
+    it("crea desde otra rama (remota) validando el origen", async () => {
+      await renderPanel();
+      await userEvent.click(screen.getByRole("button", { name: "Crear rama" }));
+      const dialog = screen.getByRole("dialog");
+      await userEvent.click(within(dialog).getByLabelText("Desde una rama"));
+      await userEvent.selectOptions(
+        within(dialog).getByLabelText("Rama de origen"),
+        "origin/feature",
+      );
+      await userEvent.type(within(dialog).getByLabelText("Nombre de la rama"), "nueva");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Crear" }));
+      expect(api.resolveRef).toHaveBeenCalledWith("repo-1", "origin/feature");
+      expect(api.createBranch).toHaveBeenCalledWith("repo-1", "nueva", "oid-origin/feature");
+    });
+
+    it("crea desde un tag", async () => {
+      vi.mocked(api.listTags).mockResolvedValue([
+        {
+          name: "v1.2.0",
+          kind: "annotated",
+          targetOid: "d".repeat(40),
+          tagOid: "e".repeat(40),
+          message: "m",
+          taggerDate: null,
+          existsLocal: true,
+          existsRemote: null,
+        },
+      ]);
+      await renderPanel();
+      await userEvent.click(screen.getByRole("button", { name: "Crear rama" }));
+      const dialog = screen.getByRole("dialog");
+      await userEvent.click(await within(dialog).findByLabelText("Desde un tag"));
+      await userEvent.type(within(dialog).getByLabelText("Nombre de la rama"), "hotfix/1.2");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Crear" }));
+      expect(api.resolveRef).toHaveBeenCalledWith("repo-1", "v1.2.0");
+      expect(api.createBranch).toHaveBeenCalledWith("repo-1", "hotfix/1.2", "oid-v1.2.0");
+    });
+
+    it("crea desde una expresión libre y una inválida no ejecuta nada", async () => {
+      vi.mocked(api.resolveRef).mockRejectedValue({
+        kind: "validation",
+        message: "«zzz» no es una rama, un tag ni un commit existente.",
+        detail: null,
+      });
+      await renderPanel();
+      await userEvent.click(screen.getByRole("button", { name: "Crear rama" }));
+      const dialog = screen.getByRole("dialog");
+      await userEvent.click(within(dialog).getByLabelText("Desde otra referencia"));
+      expect(within(dialog).getByRole("button", { name: "Crear" })).toBeDisabled();
+      await userEvent.type(within(dialog).getByLabelText("Referencia de origen"), "zzz");
+      await userEvent.type(within(dialog).getByLabelText("Nombre de la rama"), "nueva");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Crear" }));
+      expect(await within(dialog).findByRole("alert")).toHaveTextContent("no es una rama");
+      expect(api.createBranch).not.toHaveBeenCalled();
+      expect(api.checkoutBranch).not.toHaveBeenCalled();
+    });
+
+    it("cambia a la nueva rama por defecto y no lo hace si se desmarca", async () => {
+      await renderPanel();
+      await userEvent.click(screen.getByRole("button", { name: "Crear rama" }));
+      let dialog = screen.getByRole("dialog");
+      expect(within(dialog).getByLabelText("Cambiar a la nueva rama")).toBeChecked();
+      await userEvent.type(within(dialog).getByLabelText("Nombre de la rama"), "uno");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Crear" }));
+      await vi.waitFor(() => expect(api.checkoutBranch).toHaveBeenCalledWith("repo-1", "uno"));
+
+      vi.mocked(api.checkoutBranch).mockClear();
+      await userEvent.click(screen.getByRole("button", { name: "Crear rama" }));
+      dialog = screen.getByRole("dialog");
+      await userEvent.click(within(dialog).getByLabelText("Cambiar a la nueva rama"));
+      await userEvent.type(within(dialog).getByLabelText("Nombre de la rama"), "dos");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Crear" }));
+      await vi.waitFor(() => expect(api.createBranch).toHaveBeenCalledWith("repo-1", "dos", null));
+      expect(api.checkoutBranch).not.toHaveBeenCalled();
+    });
+
+    it("si la rama se crea pero no se puede cambiar a ella lo explica y refresca", async () => {
+      vi.mocked(api.checkoutBranch).mockRejectedValue({
+        kind: "git",
+        message: "Tienes cambios locales que se perderían",
+        detail: null,
+      });
+      const onChanged = await renderPanel();
+      await userEvent.click(screen.getByRole("button", { name: "Crear rama" }));
+      const dialog = screen.getByRole("dialog");
+      await userEvent.type(within(dialog).getByLabelText("Nombre de la rama"), "uno");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Crear" }));
+      expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+        "La rama «uno» se creó, pero no se pudo cambiar a ella",
+      );
+      expect(onChanged).toHaveBeenCalledTimes(1);
+    });
+
     it("con un nombre inválido muestra el motivo y deja el diálogo abierto", async () => {
       vi.mocked(api.createBranch).mockRejectedValue({
         kind: "invalidInput",
@@ -182,6 +281,86 @@ describe("BranchesPanel", () => {
       await userEvent.keyboard("{Escape}");
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
       expect(api.createBranch).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("menú contextual", () => {
+    const rightClick = (name: string) =>
+      userEvent.pointer({
+        keys: "[MouseRight]",
+        target: screen.getByRole("button", { name }),
+      });
+
+    it("los botones de fusionar muestran el texto «Fusionar»", async () => {
+      await renderPanel();
+      const locals = within(screen.getByRole("list", { name: "Ramas locales" }));
+      expect(
+        locals.getByRole("button", { name: "Fusionar «feature/login» en la rama actual" }),
+      ).toHaveTextContent("Fusionar");
+    });
+
+    it("clic derecho en una rama ofrece fusionarla y abre la vista previa", async () => {
+      await renderPanel();
+      await rightClick("feature/login");
+      const menu = screen.getByRole("menu", { name: "Acciones de «feature/login»" });
+      await userEvent.click(
+        within(menu).getByRole("menuitem", { name: "Fusionar «feature/login» en la rama actual" }),
+      );
+      expect(screen.queryByRole("menu")).toBeNull();
+      expect(await screen.findByRole("dialog", { name: /Fusionar/ })).toBeInTheDocument();
+      expect(api.mergePreview).toHaveBeenCalledWith("repo-1", "feature/login");
+    });
+
+    it("en la rama actual fusionar, cambiar y eliminar están deshabilitados", async () => {
+      await renderPanel();
+      await rightClick("main");
+      const menu = within(screen.getByRole("menu"));
+      expect(menu.getByRole("menuitem", { name: /Fusionar «main»/ })).toBeDisabled();
+      expect(menu.getByRole("menuitem", { name: "Cambiar a esta rama" })).toBeDisabled();
+      expect(menu.getByRole("menuitem", { name: "Eliminar rama…" })).toBeDisabled();
+      expect(menu.getByRole("menuitem", { name: "Crear rama desde aquí…" })).toBeEnabled();
+    });
+
+    it("cambia de rama y crea una rama desde la elegida", async () => {
+      await renderPanel();
+      await rightClick("feature/login");
+      await userEvent.click(screen.getByRole("menuitem", { name: "Cambiar a esta rama" }));
+      expect(api.checkoutBranch).toHaveBeenCalledWith("repo-1", "feature/login");
+
+      await rightClick("feature/login");
+      await userEvent.click(screen.getByRole("menuitem", { name: "Crear rama desde aquí…" }));
+      const dialog = screen.getByRole("dialog", { name: "Crear rama" });
+      expect(within(dialog).getByLabelText("Desde una rama")).toBeChecked();
+      await userEvent.type(within(dialog).getByLabelText("Nombre de la rama"), "otra");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Crear" }));
+      expect(api.resolveRef).toHaveBeenCalledWith("repo-1", "feature/login");
+    });
+
+    it("las remotas se pueden fusionar pero no eliminar desde el menú", async () => {
+      await renderPanel();
+      await rightClick("origin/main");
+      const menu = within(screen.getByRole("menu"));
+      expect(menu.getByRole("menuitem", { name: /Fusionar «origin\/main»/ })).toBeEnabled();
+      expect(menu.queryByRole("menuitem", { name: "Eliminar rama…" })).toBeNull();
+    });
+
+    it("Escape cierra el menú, las flechas se mueven y el foco empieza en la primera acción", async () => {
+      await renderPanel();
+      await rightClick("feature/login");
+      const items = screen.getAllByRole("menuitem");
+      expect(items[0]).toHaveFocus();
+      await userEvent.keyboard("{ArrowDown}");
+      expect(items[1]).toHaveFocus();
+      await userEvent.keyboard("{Escape}");
+      expect(screen.queryByRole("menu")).toBeNull();
+      expect(api.mergePreview).not.toHaveBeenCalled();
+    });
+
+    it("un clic fuera cierra el menú", async () => {
+      await renderPanel();
+      await rightClick("feature/login");
+      await userEvent.click(document.body);
+      expect(screen.queryByRole("menu")).toBeNull();
     });
   });
 

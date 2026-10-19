@@ -10,6 +10,7 @@ pub mod remotes;
 pub mod repository;
 pub mod sync;
 pub mod sync_error;
+pub mod tags;
 pub mod types;
 pub mod write;
 

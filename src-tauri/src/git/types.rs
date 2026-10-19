@@ -193,3 +193,53 @@ pub struct SyncProgress {
     pub phase: SyncPhase,
     pub percent: Option<u8>,
 }
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum TagKind {
+    Lightweight,
+    Annotated,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TagInfo {
+    pub name: String,
+    pub kind: TagKind,
+    /// Commit al que apunta (pelado).
+    pub target_oid: String,
+    /// Objeto tag; `None` si es ligero.
+    pub tag_oid: Option<String>,
+    /// Solo anotados.
+    pub message: Option<String>,
+    /// ISO 8601; en los ligeros, la fecha del commit.
+    pub tagger_date: Option<String>,
+    pub exists_local: bool,
+    /// `None` si no se ha consultado el remoto.
+    pub exists_remote: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteTag {
+    pub name: String,
+    pub target_oid: String,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ReleaseCommit {
+    pub oid: String,
+    pub subject: String,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ReleaseSuggestion {
+    pub last_tag: Option<String>,
+    pub patch: Option<String>,
+    pub minor: Option<String>,
+    pub major: Option<String>,
+    pub commits_since_last_tag: Vec<ReleaseCommit>,
+    pub behind_upstream: u32,
+}

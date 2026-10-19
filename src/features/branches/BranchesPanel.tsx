@@ -1,8 +1,10 @@
 import { useState } from "react";
+import type { MouseEvent } from "react";
 import { GitMerge, Plus, Trash2 } from "lucide-react";
 
 import { ErrorNotice } from "@/components/ErrorNotice";
 import { Button } from "@/components/ui/button";
+import { ContextMenu, type ContextMenuItem } from "@/components/ui/context-menu";
 import type { RepositoryRef } from "@/types/git";
 
 import { CreateBranchDialog } from "./CreateBranchDialog";
@@ -21,9 +23,11 @@ type Props = {
 };
 
 type Dialog =
-  | { type: "create" }
+  | { type: "create"; from?: string }
   | { type: "delete"; branch: BranchInfo; stage: DeleteStage }
   | { type: "merge"; source: string };
+
+type Menu = { branch: BranchInfo; x: number; y: number };
 
 function Sync({ branch }: { branch: BranchInfo }) {
   if (branch.ahead === 0 && branch.behind === 0) return null;
@@ -40,17 +44,57 @@ function Sync({ branch }: { branch: BranchInfo }) {
 }
 
 export function BranchesPanel({ repository, selectedOid, externalVersion, onChanged }: Props) {
-  const { branches, loadError, busy, error, clearError, checkout, create, remove } = useBranches(
+  const { branches, loadError, busy, error, clearError, checkout, remove } = useBranches(
     repository,
     externalVersion,
     onChanged,
   );
   const [dialog, setDialog] = useState<Dialog | null>(null);
+  const [menu, setMenu] = useState<Menu | null>(null);
 
   function openDialog(next: Dialog) {
     clearError();
     setDialog(next);
   }
+  function openMenu(event: MouseEvent, branch: BranchInfo) {
+    event.preventDefault();
+    setMenu({ branch, x: event.clientX, y: event.clientY });
+  }
+
+  function menuItems({ branch }: Menu): ContextMenuItem[] {
+    const isLocal = branch.kind === "local";
+    return [
+      {
+        label: `Fusionar «${branch.name}» en la rama actual`,
+        disabled: branch.isCurrent || busy,
+        hint: branch.isCurrent ? "Es la rama actual" : undefined,
+        onSelect: () => openDialog({ type: "merge", source: branch.name }),
+      },
+      {
+        label: "Cambiar a esta rama",
+        disabled: branch.isCurrent || busy,
+        hint: branch.isCurrent ? "Ya estás en esta rama" : undefined,
+        onSelect: () => void checkout(branch.name),
+      },
+      {
+        label: "Crear rama desde aquí…",
+        disabled: busy,
+        onSelect: () => openDialog({ type: "create", from: branch.name }),
+      },
+      ...(isLocal
+        ? [
+            {
+              label: "Eliminar rama…",
+              destructive: true,
+              disabled: branch.isCurrent || busy,
+              hint: "No se puede eliminar la rama actual",
+              onSelect: () => openDialog({ type: "delete", branch, stage: "confirm" as const }),
+            },
+          ]
+        : []),
+    ];
+  }
+
   function closeDialog() {
     clearError();
     setDialog(null);
@@ -99,14 +143,22 @@ export function BranchesPanel({ repository, selectedOid, externalVersion, onChan
 
       <ul aria-label="Ramas locales">
         {locals.map((branch) => (
-          <li key={branch.name} className="flex items-center gap-1">
+          <li
+            key={branch.name}
+            className="flex items-center gap-1"
+            onContextMenu={(event) => openMenu(event, branch)}
+          >
             <button
               type="button"
-              disabled={branch.isCurrent || busy}
+              // Con `aria-disabled` (no `disabled`) el clic derecho sigue llegando a la fila y abre
+              // el menú también sobre la rama actual.
+              aria-disabled={branch.isCurrent || busy}
               aria-current={branch.isCurrent ? "true" : undefined}
               title={branch.isCurrent ? "Rama actual" : `Cambiar a ${branch.name}`}
-              onClick={() => void checkout(branch.name)}
-              className="flex min-w-0 flex-1 items-center gap-1 rounded px-2 py-1 text-left text-sm hover:bg-accent disabled:cursor-default aria-[current=true]:font-semibold aria-[current=true]:bg-selected"
+              onClick={() => {
+                if (!branch.isCurrent && !busy) void checkout(branch.name);
+              }}
+              className="flex min-w-0 flex-1 items-center gap-1 rounded px-2 py-1 text-left text-sm hover:bg-accent aria-disabled:cursor-default aria-[current=true]:font-semibold aria-[current=true]:bg-selected"
             >
               <span aria-hidden="true" className="w-3 shrink-0 text-primary">
                 {branch.isCurrent ? "●" : ""}
@@ -116,8 +168,8 @@ export function BranchesPanel({ repository, selectedOid, externalVersion, onChan
             <Sync branch={branch} />
             <Button
               variant="ghost"
-              size="icon"
-              className="size-6"
+              size="sm"
+              className="h-6 shrink-0 gap-1 px-1.5 text-xs"
               disabled={branch.isCurrent || busy}
               aria-label={`Fusionar «${branch.name}» en la rama actual`}
               title={
@@ -128,6 +180,7 @@ export function BranchesPanel({ repository, selectedOid, externalVersion, onChan
               onClick={() => openDialog({ type: "merge", source: branch.name })}
             >
               <GitMerge aria-hidden="true" />
+              Fusionar
             </Button>
             <Button
               variant="ghost"
@@ -149,7 +202,11 @@ export function BranchesPanel({ repository, selectedOid, externalVersion, onChan
           <h3 className="px-2 text-xs font-semibold uppercase text-muted-foreground">Remotas</h3>
           <ul aria-label="Ramas remotas">
             {remotes.map((branch) => (
-              <li key={branch.name} className="flex items-center gap-1">
+              <li
+                key={branch.name}
+                className="flex items-center gap-1"
+                onContextMenu={(event) => openMenu(event, branch)}
+              >
                 <button
                   type="button"
                   disabled={busy}
@@ -161,14 +218,15 @@ export function BranchesPanel({ repository, selectedOid, externalVersion, onChan
                 </button>
                 <Button
                   variant="ghost"
-                  size="icon"
-                  className="size-6"
+                  size="sm"
+                  className="h-6 shrink-0 gap-1 px-1.5 text-xs"
                   disabled={busy}
                   aria-label={`Fusionar «${branch.name}» en la rama actual`}
                   title={`Fusionar «${branch.name}» en la rama actual`}
                   onClick={() => openDialog({ type: "merge", source: branch.name })}
                 >
                   <GitMerge aria-hidden="true" />
+                  Fusionar
                 </Button>
               </li>
             ))}
@@ -178,10 +236,10 @@ export function BranchesPanel({ repository, selectedOid, externalVersion, onChan
 
       {dialog?.type === "create" && (
         <CreateBranchDialog
+          repository={repository}
           selectedOid={selectedOid}
-          busy={busy}
-          error={error}
-          onCreate={create}
+          initialStart={dialog.from ? { kind: "branch", value: dialog.from } : undefined}
+          onChanged={onChanged}
           onClose={closeDialog}
         />
       )}
@@ -201,6 +259,15 @@ export function BranchesPanel({ repository, selectedOid, externalVersion, onChan
           error={error}
           onConfirm={() => void confirmDelete(dialog.branch, dialog.stage)}
           onClose={closeDialog}
+        />
+      )}
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          label={`Acciones de «${menu.branch.name}»`}
+          items={menuItems(menu)}
+          onClose={() => setMenu(null)}
         />
       )}
     </section>

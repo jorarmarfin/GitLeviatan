@@ -7,6 +7,7 @@ import type {
   MergeResult,
 } from "@/features/branches/types";
 import type { CommitDetail } from "@/features/graph/types";
+import type { ReleaseSuggestion, RemoteTag, TagInfo } from "@/features/tags/types";
 import type {
   CommitPage,
   CommitResult,
@@ -103,6 +104,25 @@ export const api = {
   cloneRepository: (url: string, destDir: string) =>
     invoke<RepositoryRef>("clone_repository", { url, destDir }),
   cancelOperation: (operationId: string) => invoke<boolean>("cancel_operation", { operationId }),
+  listTags: (repositoryId: string) => invoke<TagInfo[]>("list_tags", { repositoryId }),
+  /** Oid del commit al que apunta una rama, tag u otra expresión; falla si no existe. */
+  resolveRef: (repositoryId: string, expression: string) =>
+    invoke<string>("resolve_ref", { repositoryId, expression }),
+  /** Con `message` crea un tag anotado; sin él, uno ligero. `target` null es HEAD. */
+  createTag: (repositoryId: string, name: string, target: string | null, message: string | null) =>
+    invoke<void>("create_tag", { repositoryId, name, target, message }),
+  deleteTag: (repositoryId: string, name: string) =>
+    invoke<void>("delete_tag", { repositoryId, name }),
+  releaseSuggestion: (repositoryId: string) =>
+    invoke<ReleaseSuggestion>("release_suggestion", { repositoryId }),
+  listRemoteTags: (repositoryId: string, remote: string) =>
+    invoke<RemoteTag[]>("list_remote_tags", { repositoryId, remote }),
+  fetchTags: (repositoryId: string, remote: string) =>
+    invoke<void>("fetch_tags", { repositoryId, remote }),
+  pushTag: (repositoryId: string, remote: string, name: string) =>
+    invoke<void>("push_tag", { repositoryId, remote, name }),
+  deleteRemoteTag: (repositoryId: string, remote: string, name: string) =>
+    invoke<void>("delete_remote_tag", { repositoryId, remote, name }),
   listCommits: (repositoryId: string, cursor: string | null, limit: number) =>
     invoke<CommitPage>("list_commits", { repositoryId, cursor, limit }),
 };

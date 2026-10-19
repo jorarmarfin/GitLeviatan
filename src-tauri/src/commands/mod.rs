@@ -13,10 +13,11 @@ use crate::git::process::{check_git, set_git_path};
 use crate::git::remotes;
 use crate::git::repository::{self, Repositories};
 use crate::git::sync::{self, Operations, SyncContext};
+use crate::git::tags;
 use crate::git::types::{
     BranchInfo, CommitDetail, CommitPage, CommitResult, DeleteBranchOutcome, DiffScope, FileDiff,
-    MergePreview, MergeResult, RecentRepository, RemoteInfo, RepositoryRef, RepositoryStatus,
-    SyncProgress,
+    MergePreview, MergeResult, RecentRepository, ReleaseSuggestion, RemoteInfo, RemoteTag,
+    RepositoryRef, RepositoryStatus, SyncProgress, TagInfo,
 };
 use crate::git::write;
 use crate::storage::recent::RecentStore;
@@ -460,6 +461,120 @@ pub async fn push(
     let repo = repositories.path(&repository_id)?;
     run_sync(&app, &operations, move |ctx| {
         sync::push(&repo, &remote, &branch, ctx)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn list_tags(
+    repositories: State<'_, Repositories>,
+    repository_id: String,
+) -> Result<Vec<TagInfo>, AppError> {
+    let repo = repositories.path(&repository_id)?;
+    blocking(move || tags::list_tags(&repo)).await
+}
+
+/// Oid del commit al que apunta una rama, tag u otra expresión; valida orígenes de rama o tag.
+#[tauri::command]
+pub async fn resolve_ref(
+    repositories: State<'_, Repositories>,
+    repository_id: String,
+    expression: String,
+) -> Result<String, AppError> {
+    let repo = repositories.path(&repository_id)?;
+    blocking(move || tags::resolve_ref(&repo, &expression)).await
+}
+
+/// Con `message` crea un tag anotado; sin él, uno ligero. `target` vacío es `HEAD`.
+#[tauri::command]
+pub async fn create_tag(
+    repositories: State<'_, Repositories>,
+    repository_id: String,
+    name: String,
+    target: Option<String>,
+    message: Option<String>,
+) -> Result<(), AppError> {
+    let repo = repositories.path(&repository_id)?;
+    blocking(move || tags::create_tag(&repo, &name, target.as_deref(), message.as_deref())).await
+}
+
+#[tauri::command]
+pub async fn delete_tag(
+    repositories: State<'_, Repositories>,
+    repository_id: String,
+    name: String,
+) -> Result<(), AppError> {
+    let repo = repositories.path(&repository_id)?;
+    blocking(move || tags::delete_tag(&repo, &name)).await
+}
+
+#[tauri::command]
+pub async fn release_suggestion(
+    repositories: State<'_, Repositories>,
+    repository_id: String,
+) -> Result<ReleaseSuggestion, AppError> {
+    let repo = repositories.path(&repository_id)?;
+    blocking(move || tags::release_suggestion(&repo)).await
+}
+
+#[tauri::command]
+pub async fn list_remote_tags(
+    app: AppHandle,
+    repositories: State<'_, Repositories>,
+    operations: State<'_, Operations>,
+    repository_id: String,
+    remote: String,
+) -> Result<Vec<RemoteTag>, AppError> {
+    let repo = repositories.path(&repository_id)?;
+    run_sync(&app, &operations, move |ctx| {
+        sync::list_remote_tags(&repo, &remote, ctx)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn fetch_tags(
+    app: AppHandle,
+    repositories: State<'_, Repositories>,
+    operations: State<'_, Operations>,
+    repository_id: String,
+    remote: String,
+) -> Result<(), AppError> {
+    let repo = repositories.path(&repository_id)?;
+    run_sync(&app, &operations, move |ctx| {
+        sync::fetch_tags(&repo, &remote, ctx)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn push_tag(
+    app: AppHandle,
+    repositories: State<'_, Repositories>,
+    operations: State<'_, Operations>,
+    repository_id: String,
+    remote: String,
+    name: String,
+) -> Result<(), AppError> {
+    let repo = repositories.path(&repository_id)?;
+    run_sync(&app, &operations, move |ctx| {
+        sync::push_tag(&repo, &remote, &name, ctx)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn delete_remote_tag(
+    app: AppHandle,
+    repositories: State<'_, Repositories>,
+    operations: State<'_, Operations>,
+    repository_id: String,
+    remote: String,
+    name: String,
+) -> Result<(), AppError> {
+    let repo = repositories.path(&repository_id)?;
+    run_sync(&app, &operations, move |ctx| {
+        sync::delete_remote_tag(&repo, &remote, &name, ctx)
     })
     .await
 }

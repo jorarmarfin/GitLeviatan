@@ -1,14 +1,22 @@
 import { useEffect, useState } from "react";
+import { GitBranch, Tag } from "lucide-react";
 
 import { parseRefs } from "@/features/graph/refs";
 import type { CommitDetail } from "@/features/graph/types";
 import { ErrorNotice } from "@/components/ErrorNotice";
+import { Button } from "@/components/ui/button";
 import { api, toAppError } from "@/lib/api";
 import type { AppError, RepositoryRef } from "@/types/git";
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "long", timeStyle: "short" });
 
-type Props = { repository: RepositoryRef; oid: string };
+type Props = {
+  repository: RepositoryRef;
+  oid: string;
+  /** Si se pasan, el panel ofrece «Crear rama aquí» y «Crear tag aquí» sobre este commit. */
+  onCreateBranch?: (oid: string) => void;
+  onCreateTag?: (oid: string) => void;
+};
 
 type Load =
   | { phase: "loading" }
@@ -16,7 +24,7 @@ type Load =
   | { phase: "ready"; detail: CommitDetail };
 
 // Se remonta (prop `key`) al cambiar de commit: el estado inicial ya es "loading".
-export function CommitDetailPanel({ repository, oid }: Props) {
+export function CommitDetailPanel({ repository, oid, onCreateBranch, onCreateTag }: Props) {
   const [load, setLoad] = useState<Load>({ phase: "loading" });
 
   useEffect(() => {
@@ -68,6 +76,22 @@ export function CommitDetailPanel({ repository, oid }: Props) {
           </>
         )}
       </dl>
+      {(onCreateBranch || onCreateTag) && (
+        <div className="flex flex-wrap gap-2">
+          {onCreateBranch && (
+            <Button variant="outline" size="sm" onClick={() => onCreateBranch(detail.oid)}>
+              <GitBranch aria-hidden="true" />
+              Crear rama aquí
+            </Button>
+          )}
+          {onCreateTag && (
+            <Button variant="outline" size="sm" onClick={() => onCreateTag(detail.oid)}>
+              <Tag aria-hidden="true" />
+              Crear tag aquí
+            </Button>
+          )}
+        </div>
+      )}
     </article>
   );
 }

@@ -47,6 +47,7 @@ function setup(settings: Partial<Settings> = {}, git = { available: true, versio
   mocked.listCommits.mockResolvedValue({ commits: [], nextCursor: null });
   mocked.listBranches.mockResolvedValue([]);
   mocked.listRemotes.mockResolvedValue([]);
+  mocked.listTags.mockResolvedValue([]);
 }
 
 beforeEach(() => {

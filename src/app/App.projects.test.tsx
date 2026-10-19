@@ -52,6 +52,7 @@ beforeEach(() => {
   mocked.listCommits.mockResolvedValue({ commits: [], nextCursor: null });
   mocked.listBranches.mockResolvedValue([]);
   mocked.listRemotes.mockResolvedValue([]);
+  mocked.listTags.mockResolvedValue([]);
 
   window.matchMedia = ((query: string) => ({
     matches: false,

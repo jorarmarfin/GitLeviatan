@@ -48,6 +48,24 @@ La lista tiene el foco con `Alt+2` (o con `Tab`). La selección sigue al foco y 
 | `Tab` hasta **Fusionar** (🔀) de una rama | Abre la vista previa. El foco empieza en **Cancelar**; `Tab` lleva a **Fusionar**.        |
 | `Enter` sobre **Fusionar** en el modal    | Fusiona la rama en la actual. Con conflictos se cancela sola y no cambia nada.            |
 
+## Menú contextual de ramas
+
+| Atajo                                                   | Acción                                                                              |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Clic derecho, o `Mayús+F10` / tecla de menú, en la rama | Abre el menú: Fusionar, Cambiar a esta rama, Crear rama desde aquí y Eliminar rama. |
+| `↓` / `↑`, `Inicio` / `Fin`                             | Mueven entre las acciones. El foco empieza en la primera habilitada.                |
+| `Enter`                                                 | Ejecuta la acción. `Esc` (o un clic fuera) cierra el menú sin hacer nada.           |
+
+## Tags, rama desde un punto y release
+
+| Atajo                                                  | Acción                                                                                                |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| `Tab` hasta **Crear rama** (+) en Ramas                | Abre el diálogo. El foco empieza en el nombre; el punto de partida son radios (`↑`/`↓` para elegir).  |
+| `Tab` hasta **Crear rama aquí** / **Crear tag aquí**   | En el detalle del commit seleccionado: abre el diálogo con ese commit ya elegido.                     |
+| `Tab` por los botones de la sección Tags               | **Nueva release** (🚀), **Consultar tags del remoto** (☁), **Traer tags** (⬇) y **Crear tag** (+).    |
+| `Tab` hasta **Subir** (⬆) / **Eliminar** (🗑) de un tag | Sube solo ese tag / elimina el local. **Eliminar tag remoto** (☁✕) pide escribir el nombre del tag.   |
+| `Enter` sobre **Crear release** en el asistente        | Crea el tag anotado y, si está marcado, lo sube al remoto. Si falla la subida, **Reintentar subida**. |
+
 ## Proyectos: recientes y cierre
 
 | Atajo                              | Acción                                                                                                                              |
@@ -56,7 +74,7 @@ La lista tiene el foco con `Alt+2` (o con `Tab`). La selección sigue al foco y 
 | `Enter` / `Espacio` sobre la **×** | Abre un modal para confirmar. El foco empieza en **Cancelar**; `Tab` lleva a **Quitar**. No borra el repositorio ni nada del disco. |
 | `Tab` hasta **Cerrar repositorio** | En la cabecera: vuelve a la pantalla inicial. Deshabilitado durante fetch, pull o push.                                             |
 
-## Diálogos (cambiar de rama, fusionar, crear rama, eliminar rama, quitar de recientes, clonar, Preferencias)
+## Diálogos (cambiar de rama, fusionar, crear rama, eliminar rama, tags, release, quitar de recientes, clonar, Preferencias)
 
 | Atajo               | Acción                                              |
 | ------------------- | --------------------------------------------------- |

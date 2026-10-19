@@ -3,23 +3,71 @@ import { useState } from "react";
 import { ErrorNotice } from "@/components/ErrorNotice";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
-import type { OperationError } from "@/types/git";
+import { api, toAppError } from "@/lib/api";
+import type { AppError, RepositoryRef } from "@/types/git";
+
+import {
+  HEAD_START,
+  resolveStart,
+  startIsComplete,
+  StartPoint,
+  useStartOptions,
+  type StartChoice,
+} from "./StartPoint";
 
 type Props = {
+  repository: RepositoryRef;
+  /** Commit seleccionado en el grafo; ofrece «Desde el commit seleccionado». */
   selectedOid: string | null;
-  busy: boolean;
-  error: OperationError | null;
-  onCreate: (name: string, startPoint: string | null) => Promise<boolean>;
+  /** Origen con el que se abre el diálogo (p. ej. «Crear rama aquí» preselecciona el commit). */
+  initialStart?: StartChoice;
+  /** Se llama tras crear la rama (y cambiarse a ella), para refrescar grafo, estado y ramas. */
+  onChanged: () => void;
   onClose: () => void;
 };
 
-export function CreateBranchDialog({ selectedOid, busy, error, onCreate, onClose }: Props) {
+/** Crea una rama desde HEAD, otra rama, un tag, el commit seleccionado o una expresión. */
+export function CreateBranchDialog({
+  repository,
+  selectedOid,
+  initialStart = HEAD_START,
+  onChanged,
+  onClose,
+}: Props) {
+  const { branches, tags } = useStartOptions(repository.id);
   const [name, setName] = useState("");
-  const [fromSelected, setFromSelected] = useState(false);
+  const [start, setStart] = useState<StartChoice>(initialStart);
+  const [switchTo, setSwitchTo] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<AppError | null>(null);
 
   async function submit() {
-    const created = await onCreate(name.trim(), fromSelected && selectedOid ? selectedOid : null);
-    if (created) onClose();
+    setBusy(true);
+    setError(null);
+    const branch = name.trim();
+    try {
+      const startPoint = await resolveStart(repository.id, start, selectedOid);
+      await api.createBranch(repository.id, branch, startPoint);
+    } catch (e) {
+      setError(toAppError(e));
+      setBusy(false);
+      return;
+    }
+    try {
+      if (switchTo) await api.checkoutBranch(repository.id, branch);
+    } catch (e) {
+      // La rama ya existe: se refresca y se explica por qué no se cambió a ella.
+      const failure = toAppError(e);
+      setError({
+        ...failure,
+        message: `La rama «${branch}» se creó, pero no se pudo cambiar a ella. ${failure.message}`,
+      });
+      setBusy(false);
+      onChanged();
+      return;
+    }
+    onChanged();
+    onClose();
   }
 
   return (
@@ -41,29 +89,24 @@ export function CreateBranchDialog({ selectedOid, busy, error, onCreate, onClose
           />
         </label>
 
-        <fieldset className="flex flex-col gap-1 text-sm">
-          <legend className="mb-1">Punto de partida</legend>
-          <label className="flex items-center gap-2">
-            <input
-              type="radio"
-              name="start"
-              checked={!fromSelected}
-              onChange={() => setFromSelected(false)}
-            />
-            Desde HEAD
-          </label>
-          {selectedOid && (
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="start"
-                checked={fromSelected}
-                onChange={() => setFromSelected(true)}
-              />
-              Desde el commit seleccionado ({selectedOid.slice(0, 7)})
-            </label>
-          )}
-        </fieldset>
+        <StartPoint
+          name="branch-start"
+          legend="Punto de partida"
+          choice={start}
+          onChange={setStart}
+          selectedOid={selectedOid}
+          branches={branches}
+          tags={tags}
+        />
+
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={switchTo}
+            onChange={(event) => setSwitchTo(event.target.checked)}
+          />
+          Cambiar a la nueva rama
+        </label>
 
         {error && <ErrorNotice error={error} title="No se pudo crear la rama" />}
 
@@ -71,7 +114,11 @@ export function CreateBranchDialog({ selectedOid, busy, error, onCreate, onClose
           <Button type="button" variant="outline" size="sm" onClick={onClose}>
             Cancelar
           </Button>
-          <Button type="submit" size="sm" disabled={busy || name.trim() === ""}>
+          <Button
+            type="submit"
+            size="sm"
+            disabled={busy || name.trim() === "" || !startIsComplete(start)}
+          >
             Crear
           </Button>
         </div>

@@ -8,6 +8,21 @@ como notas de la versión.
 
 ### Añadido
 
+- **Menú contextual de ramas** (clic derecho, o la tecla de menú con el foco en la rama): Fusionar en la rama
+  actual, Cambiar a esta rama, Crear rama desde aquí y Eliminar rama. Funciona también sobre la rama actual,
+  donde las acciones que no aplican salen deshabilitadas. El botón de fusionar de cada rama ahora muestra el
+  texto «Fusionar».
+- **Crear una rama desde cualquier punto:** `HEAD`, otra rama (local o remota), un tag, el commit seleccionado
+  en el grafo o una referencia libre (oid, `HEAD~3`), validada antes de crear nada. Por defecto se cambia a la
+  nueva rama. **Crear rama aquí** en el detalle del commit (SPEC 13).
+- **Tags:** lista de tags locales (ligeros y anotados), crear (con mensaje es anotado), **Crear tag aquí** y
+  eliminar el tag local con confirmación (SPEC 13).
+- **Tags remotos:** consultar los del remoto sin descargarlos (marca los que faltan en cada lado y los que
+  apuntan a otro commit), traer tags, subir un tag concreto (sin forzar nunca) y eliminar un tag remoto
+  escribiendo su nombre (SPEC 13).
+- **Nueva release:** asistente que sugiere la versión (parche, menor o mayor) a partir del último tag
+  `vX.Y.Z`, lista los commits incluidos, avisa si la rama va por detrás de su upstream, crea el tag anotado y
+  lo sube al remoto (SPEC 13).
 - **Selector de rama** en la barra superior: muestra la rama actual y abre un modal con buscador sobre las ramas
   locales y remotas, operable con teclado; confirma el cambio («Cambiaste a «x»») (SPEC 12).
 - **Fusionar** una rama (local o remota) en la rama actual, con vista previa de los commits que entran y de si

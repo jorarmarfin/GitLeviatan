@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 import type { CommitDetail } from "@/features/graph/types";
 import { api } from "@/lib/api";
@@ -48,5 +49,30 @@ describe("CommitDetailPanel", () => {
     });
     render(<CommitDetailPanel repository={repository} oid="abcd" />);
     expect(await screen.findByRole("alert")).toHaveTextContent("no existe");
+  });
+
+  it("ofrece crear una rama o un tag en este commit", async () => {
+    vi.mocked(api.getCommit).mockResolvedValue(detail);
+    const onCreateBranch = vi.fn();
+    const onCreateTag = vi.fn();
+    render(
+      <CommitDetailPanel
+        repository={repository}
+        oid={detail.oid}
+        onCreateBranch={onCreateBranch}
+        onCreateTag={onCreateTag}
+      />,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "Crear rama aquí" }));
+    await userEvent.click(screen.getByRole("button", { name: "Crear tag aquí" }));
+    expect(onCreateBranch).toHaveBeenCalledWith(detail.oid);
+    expect(onCreateTag).toHaveBeenCalledWith(detail.oid);
+  });
+
+  it("sin acciones no muestra botones", async () => {
+    vi.mocked(api.getCommit).mockResolvedValue(detail);
+    render(<CommitDetailPanel repository={repository} oid={detail.oid} />);
+    await screen.findByText(/negrita/);
+    expect(screen.queryByRole("button")).toBeNull();
   });
 });

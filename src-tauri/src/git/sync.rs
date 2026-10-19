@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use super::error::AppError;
 use super::process::{run_git, run_git_streaming, Operation, StreamOutput};
 use super::sync_error::app_error_from_stderr;
-use super::types::{SyncPhase, SyncProgress};
+use super::types::{RemoteTag, SyncPhase, SyncProgress};
 
 /// Operaciones en curso, para poder cancelarlas por `operationId`.
 #[derive(Default)]
@@ -182,6 +182,114 @@ pub fn push(
     }
     args.extend([remote, branch]);
     ctx.run(repo, &args).map(|_| ())
+}
+
+/// Nombre de tag que Git no interpretará como opción ni como refspec (`:`, comodines).
+fn check_tag_arg(name: &str) -> Result<(), AppError> {
+    check_ref_arg("tag", name)?;
+    if name.contains([':', '*', '?', '[', '\\', '^', '~']) || name.contains("..") {
+        return Err(AppError::invalid_input(format!(
+            "El tag «{name}» no es válido."
+        )));
+    }
+    Ok(())
+}
+
+/// Tags del remoto (`ls-remote --tags`) sin descargarlos. Para los anotados, `target_oid` es
+/// el commit al que apuntan (línea pelada `^{}`), no el objeto tag.
+pub fn list_remote_tags(
+    repo: &Path,
+    remote: &str,
+    ctx: &mut SyncContext,
+) -> Result<Vec<RemoteTag>, AppError> {
+    check_ref_arg("remoto", remote)?;
+    let stdout = ctx.run(repo, &["ls-remote", "--tags", remote])?;
+    let mut tags: Vec<RemoteTag> = Vec::new();
+    for line in String::from_utf8_lossy(&stdout).lines() {
+        let Some((oid, reference)) = line.split_once('\t') else {
+            continue;
+        };
+        let Some(name) = reference.strip_prefix("refs/tags/") else {
+            continue;
+        };
+        match name.strip_suffix("^{}") {
+            Some(peeled) => {
+                if let Some(tag) = tags.iter_mut().find(|t| t.name == peeled) {
+                    tag.target_oid = oid.to_string();
+                }
+            }
+            None => tags.push(RemoteTag {
+                name: name.to_string(),
+                target_oid: oid.to_string(),
+            }),
+        }
+    }
+    tags.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(tags)
+}
+
+/// Descarga los tags del remoto sin sobrescribir los locales que apunten a otro commit.
+pub fn fetch_tags(repo: &Path, remote: &str, ctx: &mut SyncContext) -> Result<(), AppError> {
+    check_ref_arg("remoto", remote)?;
+    ctx.run(repo, &["fetch", "--progress", "--tags", remote])
+        .map(|_| ())
+}
+
+/// Sube un único tag. Nunca fuerza: si el remoto ya tiene ese nombre en otro commit, falla.
+pub fn push_tag(
+    repo: &Path,
+    remote: &str,
+    name: &str,
+    ctx: &mut SyncContext,
+) -> Result<(), AppError> {
+    check_ref_arg("remoto", remote)?;
+    check_tag_arg(name)?;
+    let reference = format!("refs/tags/{name}");
+    ctx.run(repo, &["push", "--progress", remote, &reference])
+        .map(|_| ())
+        .map_err(|error| {
+            let detail = error
+                .detail
+                .clone()
+                .unwrap_or_default()
+                .to_ascii_lowercase();
+            if detail.contains("already exists") || detail.contains("would clobber") {
+                AppError {
+                    message: format!(
+                        "El tag «{name}» ya existe en el remoto apuntando a otro commit. \
+                         No se sobrescribe; elige otro nombre o elimina antes el tag remoto."
+                    ),
+                    ..error
+                }
+            } else {
+                error
+            }
+        })
+}
+
+/// Elimina un tag del remoto. No toca el tag local.
+pub fn delete_remote_tag(
+    repo: &Path,
+    remote: &str,
+    name: &str,
+    ctx: &mut SyncContext,
+) -> Result<(), AppError> {
+    check_ref_arg("remoto", remote)?;
+    check_tag_arg(name)?;
+    // Git borra un ref inexistente sin fallar (solo avisa), así que se comprueba antes.
+    let reference = format!("refs/tags/{name}");
+    if ctx
+        .run(repo, &["ls-remote", "--tags", remote, &reference])?
+        .iter()
+        .all(u8::is_ascii_whitespace)
+    {
+        return Err(AppError::invalid_input(format!(
+            "El tag «{name}» no existe en el remoto."
+        )));
+    }
+    let refspec = format!(":{reference}");
+    ctx.run(repo, &["push", "--progress", remote, &refspec])
+        .map(|_| ())
 }
 
 /// Clona `url` en `dest` (que no debe existir o estar vacío). Si se cancela o falla,
@@ -527,5 +635,166 @@ mod tests {
         assert_eq!(err.kind, AppErrorKind::Network);
         assert!(!err.detail.unwrap_or_default().contains("secreto123"));
         assert!(!err.message.contains("secreto123"));
+    }
+
+    fn remote_tag_names(tags: &[RemoteTag]) -> Vec<&str> {
+        tags.iter().map(|t| t.name.as_str()).collect()
+    }
+
+    #[test]
+    fn lists_remote_tags_with_the_commit_of_annotated_ones() {
+        let (remote, local) = remote_and_clone();
+        let head = rev(local.path(), "HEAD");
+        git(local.path(), &["tag", "ligero"]);
+        git(local.path(), &["tag", "-a", "v1.0.0", "-m", "x"]);
+        git(local.path(), &["push", "-q", "origin", "ligero", "v1.0.0"]);
+        git(local.path(), &["tag", "solo-local"]);
+
+        let op = Operation::default();
+        let (tags, _) = with_ctx(&op, |ctx| list_remote_tags(local.path(), "origin", ctx));
+        let tags = tags.unwrap();
+        assert_eq!(remote_tag_names(&tags), vec!["ligero", "v1.0.0"]);
+        assert!(tags.iter().all(|t| t.target_oid == head));
+        // No descarga nada: el remoto sigue sin tocar el repositorio local.
+        assert!(!remote.path().join("refs/tags/solo-local").exists());
+    }
+
+    #[test]
+    fn lists_no_tags_when_the_remote_has_none() {
+        let (_remote, local) = remote_and_clone();
+        let op = Operation::default();
+        let (tags, _) = with_ctx(&op, |ctx| list_remote_tags(local.path(), "origin", ctx));
+        assert!(tags.unwrap().is_empty());
+    }
+
+    #[test]
+    fn listing_tags_of_an_unreachable_remote_fails_with_context() {
+        let local = init_repo();
+        commit_file(local.path(), "a.txt", "x", "base");
+        let missing = tempfile::tempdir().unwrap();
+        git(
+            local.path(),
+            &[
+                "remote",
+                "add",
+                "origin",
+                &url(&missing.path().join("nada")),
+            ],
+        );
+        let op = Operation::default();
+        let (result, _) = with_ctx(&op, |ctx| list_remote_tags(local.path(), "origin", ctx));
+        let error = result.unwrap_err();
+        assert!(error.detail.is_some());
+    }
+
+    #[test]
+    fn fetch_tags_downloads_remote_tags() {
+        let (remote, local) = remote_and_clone();
+        let other = tempfile::tempdir().unwrap();
+        git(other.path(), &["clone", "-q", &url(remote.path()), "."]);
+        git(other.path(), &["config", "user.name", "Otro"]);
+        git(other.path(), &["config", "user.email", "otro@example.com"]);
+        git(other.path(), &["tag", "-a", "v2.0.0", "-m", "x"]);
+        git(other.path(), &["push", "-q", "origin", "v2.0.0"]);
+
+        let op = Operation::default();
+        let (result, events) = with_ctx(&op, |ctx| fetch_tags(local.path(), "origin", ctx));
+        result.unwrap();
+        assert_eq!(
+            rev(local.path(), "v2.0.0^{commit}"),
+            rev(local.path(), "HEAD")
+        );
+        assert_eq!(events.last().unwrap().phase, SyncPhase::Done);
+    }
+
+    #[test]
+    fn push_tag_publishes_only_the_chosen_tag() {
+        let (remote, local) = remote_and_clone();
+        git(local.path(), &["tag", "-a", "v1.0.0", "-m", "x"]);
+        git(local.path(), &["tag", "otro"]);
+
+        let op = Operation::default();
+        let (result, _) = with_ctx(&op, |ctx| push_tag(local.path(), "origin", "v1.0.0", ctx));
+        result.unwrap();
+        let remote_tags = run_git(remote.path(), ["tag", "-l"]).unwrap();
+        assert_eq!(
+            String::from_utf8_lossy(&remote_tags.stdout).trim(),
+            "v1.0.0"
+        );
+    }
+
+    #[test]
+    fn push_tag_never_overwrites_a_tag_pointing_elsewhere() {
+        let (remote, local) = remote_and_clone();
+        git(local.path(), &["tag", "v1.0.0"]);
+        git(local.path(), &["push", "-q", "origin", "v1.0.0"]);
+        let published = rev(remote.path(), "v1.0.0");
+        commit_file(local.path(), "b.txt", "x", "segundo");
+        git(local.path(), &["tag", "-f", "v1.0.0"]);
+
+        let op = Operation::default();
+        let (result, _) = with_ctx(&op, |ctx| push_tag(local.path(), "origin", "v1.0.0", ctx));
+        let error = result.unwrap_err();
+        assert!(
+            error.message.contains("ya existe en el remoto"),
+            "{}",
+            error.message
+        );
+        assert_eq!(rev(remote.path(), "v1.0.0"), published);
+    }
+
+    #[test]
+    fn deletes_a_remote_tag_without_touching_the_local_one() {
+        let (remote, local) = remote_and_clone();
+        git(local.path(), &["tag", "v1.0.0"]);
+        git(local.path(), &["push", "-q", "origin", "v1.0.0"]);
+
+        let op = Operation::default();
+        let (result, _) = with_ctx(&op, |ctx| {
+            delete_remote_tag(local.path(), "origin", "v1.0.0", ctx)
+        });
+        result.unwrap();
+        assert!(run_git(remote.path(), ["tag", "-l"])
+            .unwrap()
+            .stdout
+            .is_empty());
+        assert!(run_git(local.path(), ["rev-parse", "--verify", "refs/tags/v1.0.0"]).is_ok());
+    }
+
+    #[test]
+    fn deleting_a_missing_remote_tag_explains_it() {
+        let (_remote, local) = remote_and_clone();
+        let op = Operation::default();
+        let (result, _) = with_ctx(&op, |ctx| {
+            delete_remote_tag(local.path(), "origin", "nada", ctx)
+        });
+        assert!(result
+            .unwrap_err()
+            .message
+            .contains("no existe en el remoto"));
+    }
+
+    #[test]
+    fn tag_commands_reject_names_git_would_misread() {
+        let (_remote, local) = remote_and_clone();
+        let op = Operation::default();
+        for bad in ["", "-x", "a b", ":refs/heads/main", "v*", "a..b"] {
+            let (pushed, _) = with_ctx(&op, |ctx| push_tag(local.path(), "origin", bad, ctx));
+            assert_eq!(
+                pushed.unwrap_err().kind,
+                AppErrorKind::Validation,
+                "{bad:?}"
+            );
+            let (deleted, _) = with_ctx(&op, |ctx| {
+                delete_remote_tag(local.path(), "origin", bad, ctx)
+            });
+            assert_eq!(
+                deleted.unwrap_err().kind,
+                AppErrorKind::Validation,
+                "{bad:?}"
+            );
+        }
+        let (listed, _) = with_ctx(&op, |ctx| list_remote_tags(local.path(), "-x", ctx));
+        assert_eq!(listed.unwrap_err().kind, AppErrorKind::Validation);
     }
 }
