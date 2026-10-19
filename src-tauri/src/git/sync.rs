@@ -231,7 +231,7 @@ pub fn clone(url: &str, dest: &Path, ctx: &mut SyncContext) -> Result<(), AppErr
 #[cfg(test)]
 mod tests {
     use super::super::error::AppErrorKind;
-    use super::super::testutil::{commit_file, git, init_bare, init_repo};
+    use super::super::testutil::{commit_file, file_url, git, init_bare, init_repo};
     use super::*;
 
     /// Ejecuta una función de sync recogiendo los eventos emitidos.
@@ -258,7 +258,7 @@ mod tests {
     }
 
     fn url(dir: &Path) -> String {
-        format!("file://{}", dir.display())
+        file_url(dir)
     }
 
     /// Remoto bare + clon local con un commit inicial ya publicado.

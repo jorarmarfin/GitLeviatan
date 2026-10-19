@@ -259,6 +259,31 @@ mod tests {
         assert!(refs.contains(&"tag: refs/tags/v1".to_string()));
     }
 
+    /// Un repositorio con `core.autocrlf=true` (Windows) no debe mostrar cambios falsos: el
+    /// working tree tiene CRLF y el índice LF, pero para Git son el mismo contenido.
+    #[test]
+    fn autocrlf_does_not_create_false_changes() {
+        let repo = init_repo();
+        git(repo.path(), &["config", "core.autocrlf", "true"]);
+        std::fs::write(repo.path().join("a.txt"), "uno\r\ndos\r\n").unwrap();
+        std::fs::write(repo.path().join("b.txt"), "tres\r\n").unwrap();
+        git(repo.path(), &["add", "--", "a.txt", "b.txt"]);
+        git(repo.path(), &["commit", "-q", "-m", "inicial"]);
+
+        let clean = get_status(repo.path()).unwrap();
+        assert!(clean.staged.is_empty() && clean.unstaged.is_empty() && clean.untracked.is_empty());
+
+        // Reescribir el mismo contenido (otro editor, otro checkout) tampoco cambia nada.
+        std::fs::write(repo.path().join("a.txt"), "uno\r\ndos\r\n").unwrap();
+        assert!(get_status(repo.path()).unwrap().unstaged.is_empty());
+
+        // Un cambio real sí aparece, y solo en ese archivo.
+        std::fs::write(repo.path().join("a.txt"), "uno\r\nDOS\r\n").unwrap();
+        let status = get_status(repo.path()).unwrap();
+        assert_eq!(status.unstaged.len(), 1);
+        assert_eq!(status.unstaged[0].path, "a.txt");
+    }
+
     /// Umbrales de `tests/perf/thresholds.json` (SPEC 08). Se toma el mejor de 3 intentos
     /// para que el ruido del CI no dé falsos positivos.
     #[test]

@@ -25,7 +25,17 @@ pub fn resolve_toplevel(path: &Path) -> Result<PathBuf, AppError> {
     if top.is_empty() {
         return Err(AppError::not_a_repository());
     }
-    Ok(PathBuf::from(top))
+    Ok(native_path(&top))
+}
+
+/// Git siempre devuelve `/` (`C:/Users/ana/repo`); en Windows se pasa a `\` para que la ruta
+/// mostrada, la de recientes y la del registro coincidan con las que da el selector de carpetas.
+fn native_path(git_path: &str) -> PathBuf {
+    if cfg!(windows) {
+        PathBuf::from(git_path.replace('/', "\\"))
+    } else {
+        PathBuf::from(git_path)
+    }
 }
 
 #[derive(Default)]
@@ -96,6 +106,21 @@ mod tests {
             top.canonicalize().unwrap(),
             repo.path().canonicalize().unwrap()
         );
+    }
+
+    #[test]
+    fn git_paths_become_native_paths() {
+        if cfg!(windows) {
+            assert_eq!(
+                native_path("C:/Users/ana/mi repo"),
+                PathBuf::from("C:\\Users\\ana\\mi repo")
+            );
+        } else {
+            assert_eq!(
+                native_path("/home/ana/mi repo"),
+                PathBuf::from("/home/ana/mi repo")
+            );
+        }
     }
 
     #[test]

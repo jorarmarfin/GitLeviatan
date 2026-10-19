@@ -44,7 +44,12 @@ export function isAllowed(expression, extra = new Set()) {
 
 function listLicenses(prodOnly) {
   const args = ["licenses", "list", "--json", ...(prodOnly ? ["--prod"] : [])];
-  const out = execFileSync("pnpm", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  // En Windows `pnpm` es un .cmd y solo se puede lanzar a través de una shell (argumentos fijos).
+  const out = execFileSync("pnpm", args, {
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+    shell: process.platform === "win32",
+  });
   return JSON.parse(out);
 }
 

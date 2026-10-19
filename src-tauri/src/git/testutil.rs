@@ -33,6 +33,16 @@ pub fn commit_file(dir: &Path, name: &str, content: &str, message: &str) {
     git(dir, &["commit", "-q", "-m", message]);
 }
 
+/// URL `file://` válida en cualquier SO: en Windows `C:\\tmp\\r` pasa a `file:///C:/tmp/r`.
+pub fn file_url(path: &Path) -> String {
+    let text = path.to_string_lossy().replace('\\', "/");
+    if text.starts_with('/') {
+        format!("file://{text}")
+    } else {
+        format!("file:///{text}")
+    }
+}
+
 /// Repositorio bare para usar como remoto.
 pub fn init_bare() -> TempDir {
     let dir = tempfile::tempdir().unwrap();
@@ -110,4 +120,18 @@ pub fn perf_repo(total: usize) -> TempDir {
     assert!(child.wait().unwrap().success(), "git fast-import falló");
     git(dir.path(), &["checkout", "-q", "-f", "main"]);
     dir
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn file_url_is_valid_for_unix_and_windows_paths() {
+        assert_eq!(file_url(Path::new("/tmp/r")), "file:///tmp/r");
+        assert_eq!(
+            file_url(Path::new("C:\\Users\\ana\\r")),
+            "file:///C:/Users/ana/r"
+        );
+    }
 }
