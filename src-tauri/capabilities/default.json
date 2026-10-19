@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Permisos mínimos de la ventana principal. Sin shell ni fs.",
   "windows": ["main"],
-  "permissions": ["core:event:default"]
+  "permissions": ["core:event:default", "dialog:allow-open"]
 }

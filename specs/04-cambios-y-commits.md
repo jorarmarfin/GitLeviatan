@@ -1,6 +1,6 @@
 # SPEC 04 — Stage, diff y commit
 
-> **Estado:** Borrador
+> **Estado:** Approved
 > **Depende de:** SPEC 02
 > **Fecha:** 2026-10-19
 > **Objetivo:** Permitir hacer stage y unstage por archivo, ver el diff de archivos de texto en un visor Monaco y crear commits mostrando errores de validación y de hooks.

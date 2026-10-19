@@ -1,3 +1,5 @@
+<p align="center"><img src="src/assets/logo.png" alt="Logo de GitLeviatán" width="160" /></p>
+
 # GitLeviatán
 
 **ES:** Cliente gráfico de Git, libre y local-first. _El poder de Git, bajo tu control._
