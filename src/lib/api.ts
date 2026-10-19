@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
+import type { BranchInfo, DeleteBranchOutcome } from "@/features/branches/types";
 import type { CommitDetail } from "@/features/graph/types";
 import type {
   CommitPage,
@@ -44,6 +45,13 @@ export const api = {
     invoke<FileDiff>("get_diff", { repositoryId, path, scope }),
   createCommit: (repositoryId: string, message: string) =>
     invoke<CommitResult>("create_commit", { repositoryId, message }),
+  listBranches: (repositoryId: string) => invoke<BranchInfo[]>("list_branches", { repositoryId }),
+  createBranch: (repositoryId: string, name: string, startPoint: string | null) =>
+    invoke<void>("create_branch", { repositoryId, name, startPoint }),
+  checkoutBranch: (repositoryId: string, branch: string) =>
+    invoke<void>("checkout_branch", { repositoryId, branch }),
+  deleteBranch: (repositoryId: string, branch: string, force: boolean) =>
+    invoke<DeleteBranchOutcome>("delete_branch", { repositoryId, branch, force }),
   listCommits: (repositoryId: string, cursor: string | null, limit: number) =>
     invoke<CommitPage>("list_commits", { repositoryId, cursor, limit }),
 };

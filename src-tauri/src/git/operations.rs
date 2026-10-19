@@ -54,7 +54,7 @@ pub fn list_commits(
     })
 }
 
-fn is_valid_oid(oid: &str) -> bool {
+pub(crate) fn is_valid_oid(oid: &str) -> bool {
     (4..=64).contains(&oid.len()) && oid.chars().all(|c| c.is_ascii_hexdigit())
 }
 

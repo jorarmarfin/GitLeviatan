@@ -18,6 +18,10 @@ pub fn run() {
             commands::unstage_files,
             commands::get_diff,
             commands::create_commit,
+            commands::list_branches,
+            commands::create_branch,
+            commands::checkout_branch,
+            commands::delete_branch,
         ])
         .run(tauri::generate_context!())
         .expect("error al ejecutar la aplicación Tauri");

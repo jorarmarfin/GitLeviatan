@@ -3,8 +3,8 @@ import { useEffect, useState } from "react";
 import logo from "@/assets/logo.png";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { OpenRepositoryButton } from "@/features/repositories/OpenRepositoryButton";
-import { RecentRepositories } from "@/features/repositories/RecentRepositories";
 import { ping } from "@/lib/ping";
+import { Sidebar } from "@/app/Sidebar";
 import { Workspace } from "@/app/Workspace";
 import { useRepositoryStore } from "@/stores/repository";
 
@@ -43,16 +43,16 @@ export function App() {
       )}
 
       <div className="grid min-h-0 flex-1 grid-cols-[14rem_1fr]">
-        <aside className="overflow-y-auto border-r border-border p-2">
-          <RecentRepositories />
-        </aside>
         {active ? (
           <Workspace key={active.id} repository={active} />
         ) : (
-          <main className="p-6 text-muted-foreground">
-            Abre un repositorio para ver su historial. <br />
-            El poder de Git, bajo tu control.
-          </main>
+          <>
+            <Sidebar />
+            <main className="p-6 text-muted-foreground">
+              Abre un repositorio para ver su historial. <br />
+              El poder de Git, bajo tu control.
+            </main>
+          </>
         )}
       </div>
 

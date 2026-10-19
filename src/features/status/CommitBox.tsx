@@ -1,8 +1,8 @@
 import { useState } from "react";
 
+import { ErrorNotice } from "@/components/ErrorNotice";
 import { Button } from "@/components/ui/button";
-
-import type { OperationError } from "./useChanges";
+import type { OperationError } from "@/types/git";
 
 type Props = {
   stagedCount: number;
@@ -39,19 +39,7 @@ export function CommitBox({ stagedCount, busy, error, onCommit }: Props) {
       <Button type="submit" size="sm" disabled={!canCommit}>
         {busy ? "Trabajando…" : `Commit (${stagedCount})`}
       </Button>
-      {error && (
-        <div role="alert" className="text-sm text-destructive">
-          <p>{error.message}</p>
-          {error.detail && (
-            <details className="mt-1">
-              <summary className="cursor-pointer text-xs">Ver detalle técnico</summary>
-              <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap text-xs">
-                {error.detail}
-              </pre>
-            </details>
-          )}
-        </div>
-      )}
+      {error && <ErrorNotice error={error} />}
     </form>
   );
 }

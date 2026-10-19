@@ -98,3 +98,35 @@ pub struct CommitResult {
     pub oid: String,
     pub short_oid: String,
 }
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum BranchKind {
+    Local,
+    Remote,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BranchInfo {
+    pub name: String,
+    pub kind: BranchKind,
+    pub is_current: bool,
+    pub upstream: Option<String>,
+    pub ahead: u32,
+    pub behind: u32,
+    pub tip_oid: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum DeleteReason {
+    NotMerged,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(tag = "status", rename_all = "camelCase")]
+pub enum DeleteBranchOutcome {
+    Deleted,
+    NeedsForce { reason: DeleteReason },
+}

@@ -42,3 +42,6 @@ export type FileDiff = {
 };
 
 export type CommitResult = { oid: string; shortOid: string };
+
+/** Error de una operación que modifica el repositorio, con el stderr de Git si lo hay. */
+export type OperationError = { message: string; detail: string | null };

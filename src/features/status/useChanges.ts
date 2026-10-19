@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { api, errorDetail, errorMessage } from "@/lib/api";
-import type { RepositoryRef, RepositoryStatus } from "@/types/git";
-
-export type OperationError = { message: string; detail: string | null };
+import type { OperationError, RepositoryRef, RepositoryStatus } from "@/types/git";
 
 /** Estado de cambios del repositorio y las operaciones que lo modifican. */
-export function useChanges(repository: RepositoryRef, onCommitted: () => void) {
+export function useChanges(
+  repository: RepositoryRef,
+  onCommitted: () => void,
+  externalVersion = 0,
+) {
   const [version, setVersion] = useState(0);
   const [status, setStatus] = useState<RepositoryStatus | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -26,7 +28,7 @@ export function useChanges(repository: RepositoryRef, onCommitted: () => void) {
     return () => {
       current = false;
     };
-  }, [repository.id, version]);
+  }, [repository.id, version, externalVersion]);
 
   // Tras cada operación (con éxito o sin él) se vuelve a leer el estado real.
   const run = useCallback(async (operation: () => Promise<unknown>) => {

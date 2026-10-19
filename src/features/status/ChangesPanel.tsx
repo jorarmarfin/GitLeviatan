@@ -8,7 +8,12 @@ import type { ChangedFile, DiffScope, RepositoryRef, RepositoryStatus } from "@/
 import { CommitBox } from "./CommitBox";
 import { useChanges } from "./useChanges";
 
-type Props = { repository: RepositoryRef; onCommitted: () => void };
+type Props = {
+  repository: RepositoryRef;
+  onCommitted: () => void;
+  /** Sube cuando otra parte de la app cambió el repositorio (p. ej. al cambiar de rama). */
+  externalVersion?: number;
+};
 
 type FileRowProps = {
   file: ChangedFile;
@@ -80,10 +85,11 @@ function exists(status: RepositoryStatus, selection: DiffSelection): boolean {
   );
 }
 
-export function ChangesPanel({ repository, onCommitted }: Props) {
+export function ChangesPanel({ repository, onCommitted, externalVersion = 0 }: Props) {
   const { status, loadError, busy, operationError, version, stage, unstage, commit } = useChanges(
     repository,
     onCommitted,
+    externalVersion,
   );
   const [selection, setSelection] = useState<DiffSelection | null>(null);
 

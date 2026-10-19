@@ -1,6 +1,6 @@
 # SPEC 05 — Ramas locales y ramas de seguimiento
 
-> **Estado:** Approved
+> **Estado:** Implemented
 > **Depende de:** SPEC 02, SPEC 04
 > **Fecha:** 2026-10-19
 > **Objetivo:** Listar ramas locales y de seguimiento, y permitir crear, cambiar y eliminar ramas locales con confirmaciones de seguridad.

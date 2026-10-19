@@ -32,3 +32,10 @@ pub fn commit_file(dir: &Path, name: &str, content: &str, message: &str) {
     git(dir, &["add", "--", name]);
     git(dir, &["commit", "-q", "-m", message]);
 }
+
+/// Repositorio bare para usar como remoto.
+pub fn init_bare() -> TempDir {
+    let dir = tempfile::tempdir().unwrap();
+    git(dir.path(), &["init", "-q", "--bare", "-b", "main"]);
+    dir
+}

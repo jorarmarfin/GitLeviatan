@@ -4,13 +4,14 @@ use std::path::Path;
 
 use tauri::{AppHandle, Manager, State};
 
+use crate::git::branches;
 use crate::git::diff;
 use crate::git::error::GitError;
 use crate::git::operations;
 use crate::git::repository::{self, Repositories};
 use crate::git::types::{
-    CommitDetail, CommitPage, CommitResult, DiffScope, FileDiff, RecentRepository, RepositoryRef,
-    RepositoryStatus,
+    BranchInfo, CommitDetail, CommitPage, CommitResult, DeleteBranchOutcome, DiffScope, FileDiff,
+    RecentRepository, RepositoryRef, RepositoryStatus,
 };
 use crate::git::write;
 use crate::storage::recent::RecentStore;
@@ -138,6 +139,47 @@ pub async fn create_commit(
 ) -> Result<CommitResult, GitError> {
     let repo = repositories.path(&repository_id)?;
     blocking(move || write::create_commit(&repo, &message)).await
+}
+
+#[tauri::command]
+pub async fn list_branches(
+    repositories: State<'_, Repositories>,
+    repository_id: String,
+) -> Result<Vec<BranchInfo>, GitError> {
+    let repo = repositories.path(&repository_id)?;
+    blocking(move || branches::list_branches(&repo)).await
+}
+
+#[tauri::command]
+pub async fn create_branch(
+    repositories: State<'_, Repositories>,
+    repository_id: String,
+    name: String,
+    start_point: Option<String>,
+) -> Result<(), GitError> {
+    let repo = repositories.path(&repository_id)?;
+    blocking(move || branches::create_branch(&repo, &name, start_point.as_deref())).await
+}
+
+#[tauri::command]
+pub async fn checkout_branch(
+    repositories: State<'_, Repositories>,
+    repository_id: String,
+    branch: String,
+) -> Result<(), GitError> {
+    let repo = repositories.path(&repository_id)?;
+    blocking(move || branches::checkout_branch(&repo, &branch)).await
+}
+
+#[tauri::command]
+pub async fn delete_branch(
+    repositories: State<'_, Repositories>,
+    repository_id: String,
+    branch: String,
+    force: bool,
+) -> Result<DeleteBranchOutcome, GitError> {
+    let repo = repositories.path(&repository_id)?;
+    blocking(move || branches::delete_branch(&repo, &branch, force)).await
 }
 
 #[cfg(test)]
