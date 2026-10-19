@@ -45,6 +45,19 @@ impl RecentStore {
         self.write(list)
     }
 
+    /// Quita un proyecto de la lista y persiste el cambio. Solo toca `recent.json`: ni el
+    /// repositorio ni sus archivos. Una ruta que no está en la lista no es un error, y no se
+    /// reescribe el archivo (así tampoco se pisa uno corrupto sin necesidad).
+    pub fn remove(&self, path: &str) -> io::Result<()> {
+        let mut list = self.load();
+        let before = list.len();
+        list.retain(|r| r.path != path);
+        if list.len() == before {
+            return Ok(());
+        }
+        self.write(list)
+    }
+
     /// Vacía la lista y persiste el cambio.
     pub fn clear(&self) -> io::Result<()> {
         self.write(Vec::new())
@@ -166,5 +179,76 @@ mod tests {
         fs::create_dir_all(store.path.parent().unwrap()).unwrap();
         fs::write(&store.path, r#"{"version":99,"repositories":[]}"#).unwrap();
         assert!(store.load().is_empty());
+    }
+
+    #[test]
+    fn remove_drops_only_that_entry_and_keeps_the_order() {
+        let (_dir, store) = store();
+        for n in 1..=4 {
+            store.record(repo(n)).unwrap();
+        }
+        // Orden actual: 4, 3, 2, 1.
+        store.remove("/repos/3").unwrap();
+        let paths: Vec<_> = store.load().into_iter().map(|r| r.path).collect();
+        assert_eq!(paths, vec!["/repos/4", "/repos/2", "/repos/1"]);
+    }
+
+    #[test]
+    fn remove_persists_after_reloading() {
+        let (dir, store) = store();
+        store.record(repo(1)).unwrap();
+        store.record(repo(2)).unwrap();
+        store.remove("/repos/1").unwrap();
+        let again = RecentStore::new(dir.path().join("cfg").join("recent.json"), 20);
+        let paths: Vec<_> = again.load().into_iter().map(|r| r.path).collect();
+        assert_eq!(paths, vec!["/repos/2"]);
+    }
+
+    #[test]
+    fn removing_an_absent_path_is_not_an_error_and_writes_nothing() {
+        let (_dir, store) = store();
+        store.record(repo(1)).unwrap();
+        let before = fs::read_to_string(&store.path).unwrap();
+        store.remove("/repos/no-existe").unwrap();
+        assert_eq!(fs::read_to_string(&store.path).unwrap(), before);
+        // Tampoco falla si el archivo ni siquiera existe.
+        let (_dir2, empty) = self::store();
+        empty.remove("/repos/1").unwrap();
+        assert!(!empty.path.exists());
+    }
+
+    #[test]
+    fn removing_the_last_entry_leaves_an_empty_list() {
+        let (_dir, store) = store();
+        store.record(repo(1)).unwrap();
+        store.remove("/repos/1").unwrap();
+        assert!(store.load().is_empty());
+    }
+
+    #[test]
+    fn removing_never_touches_the_repository_on_disk() {
+        let (dir, store) = store();
+        let project = dir.path().join("proyecto");
+        fs::create_dir_all(project.join(".git")).unwrap();
+        fs::write(project.join("a.txt"), "x").unwrap();
+        let mut entry = repo(1);
+        entry.path = project.to_string_lossy().into_owned();
+        store.record(entry.clone()).unwrap();
+
+        store.remove(&entry.path).unwrap();
+        assert!(project.join("a.txt").exists());
+        assert!(project.join(".git").is_dir());
+    }
+
+    #[test]
+    fn remove_on_a_corrupt_file_does_not_fail_or_overwrite_it() {
+        let (_dir, store) = store();
+        fs::create_dir_all(store.path.parent().unwrap()).unwrap();
+        fs::write(&store.path, "{ esto no es json").unwrap();
+        store.remove("/repos/1").unwrap();
+        assert_eq!(
+            fs::read_to_string(&store.path).unwrap(),
+            "{ esto no es json"
+        );
     }
 }

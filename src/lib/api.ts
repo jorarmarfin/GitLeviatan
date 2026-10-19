@@ -58,6 +58,8 @@ export function toAppError(error: unknown): AppError {
 export const api = {
   openRepository: (path: string) => invoke<RepositoryRef>("open_repository", { path }),
   listRecentRepositories: () => invoke<RecentRepository[]>("list_recent_repositories"),
+  removeRecentRepository: (path: string) => invoke<void>("remove_recent_repository", { path }),
+  getAppVersion: () => invoke<string>("get_app_version"),
   clearRecentRepositories: () => invoke<void>("clear_recent_repositories"),
   getSettings: () => invoke<Settings>("get_settings"),
   updateSettings: (newSettings: Settings) => invoke<Settings>("update_settings", { newSettings }),

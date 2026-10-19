@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 
 import logo from "@/assets/logo.png";
+import { AppFooter } from "@/components/AppFooter";
 import { ErrorNotice } from "@/components/ErrorNotice";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { GitMissingScreen } from "@/features/settings/GitMissingScreen";
 import { PreferencesButton } from "@/features/settings/PreferencesButton";
 import { PreferencesDialog } from "@/features/settings/PreferencesDialog";
+import { CloseRepositoryButton } from "@/features/repositories/CloseRepositoryButton";
 import { OpenRepositoryButton } from "@/features/repositories/OpenRepositoryButton";
 import { CloneRepositoryButton } from "@/features/sync/CloneRepositoryButton";
-import { ping } from "@/lib/ping";
 import { Sidebar } from "@/app/Sidebar";
 import { Workspace } from "@/app/Workspace";
 import { useApplyTheme } from "@/lib/useApplyTheme";
@@ -17,7 +18,6 @@ import { useRepositoryStore } from "@/stores/repository";
 import { useSettingsStore } from "@/stores/settings";
 
 export function App() {
-  const [pong, setPong] = useState<string>("…");
   const active = useRepositoryStore((s) => s.active);
   const error = useRepositoryStore((s) => s.error);
   const theme = useSettingsStore((s) => s.settings.theme);
@@ -36,12 +36,6 @@ export function App() {
     void loadSettings();
   }, [loadSettings]);
 
-  useEffect(() => {
-    ping()
-      .then(setPong)
-      .catch((e: unknown) => setPong(`error: ${String(e)}`));
-  }, []);
-
   return (
     <div className="flex h-screen flex-col">
       <header className="flex items-center gap-4 border-b border-t-2 border-border border-t-accent-git px-4 py-2">
@@ -50,6 +44,7 @@ export function App() {
         <span className="truncate text-sm text-muted-foreground" title={active?.path}>
           {active ? active.name : "Ningún repositorio abierto"}
         </span>
+        <CloseRepositoryButton />
         <div className="ml-auto flex items-center gap-3">
           <CloneRepositoryButton />
           <OpenRepositoryButton />
@@ -63,7 +58,9 @@ export function App() {
           <ErrorNotice
             error={(error ?? settingsError)!}
             title={
-              error ? "No se pudo completar la operación" : "No se pudieron cargar las preferencias"
+              error
+                ? (error.context ?? "No se pudo completar la operación")
+                : "No se pudieron cargar las preferencias"
             }
           />
         </div>
@@ -91,9 +88,7 @@ export function App() {
 
       {preferencesOpen && <PreferencesDialog onClose={() => setPreferencesOpen(false)} />}
 
-      <footer className="border-t border-border px-4 py-1 text-xs text-muted-foreground">
-        <span data-testid="ping">ping: {pong}</span>
-      </footer>
+      <AppFooter />
     </div>
   );
 }
