@@ -72,7 +72,7 @@ describe("settings store", () => {
 
   it("update devuelve el error y no cambia las preferencias si se rechaza", async () => {
     vi.mocked(api.updateSettings).mockRejectedValue({
-      kind: "gitMissing",
+      kind: "git",
       message: "No se encontró el ejecutable de Git.",
       detail: null,
     });

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 
-import { api, syncFailure } from "@/lib/api";
-import type { SyncFailure, SyncProgress } from "@/types/git";
+import { api, toAppError } from "@/lib/api";
+import type { AppError, SyncProgress } from "@/types/git";
 
-export type SyncResult<T> = { ok: true; value: T } | { ok: false; failure: SyncFailure };
+export type SyncResult<T> = { ok: true; value: T } | { ok: false; failure: AppError };
 
 /**
  * Ejecuta una operación de red del backend y sigue su progreso (`sync-progress`).
@@ -42,7 +42,7 @@ export function useSyncOperation() {
     try {
       return { ok: true, value: await operation() };
     } catch (error) {
-      return { ok: false, failure: syncFailure(error) };
+      return { ok: false, failure: toAppError(error) };
     } finally {
       activeRef.current = false;
       setRunning(false);

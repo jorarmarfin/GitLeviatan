@@ -2,28 +2,28 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use super::error::GitError;
+use super::error::AppError;
 use super::process::run_git;
 use super::types::RepositoryRef;
 
 /// Valida que `path` esté dentro de un working tree Git y devuelve su raíz.
-pub fn resolve_toplevel(path: &Path) -> Result<PathBuf, GitError> {
+pub fn resolve_toplevel(path: &Path) -> Result<PathBuf, AppError> {
     let bare = run_git(path, ["rev-parse", "--is-bare-repository"]).map_err(|error| {
         let detail = error.detail.as_deref().unwrap_or("");
         if detail.contains("not a git repository") {
-            GitError::not_a_repository()
+            AppError::not_a_repository()
         } else {
             error
         }
     })?;
     if String::from_utf8_lossy(&bare.stdout).trim() == "true" {
-        return Err(GitError::bare_repository());
+        return Err(AppError::bare_repository());
     }
 
     let top = run_git(path, ["rev-parse", "--show-toplevel"])?;
     let top = String::from_utf8_lossy(&top.stdout).trim_end().to_string();
     if top.is_empty() {
-        return Err(GitError::not_a_repository());
+        return Err(AppError::not_a_repository());
     }
     Ok(PathBuf::from(top))
 }
@@ -68,7 +68,7 @@ impl Repositories {
         }
     }
 
-    pub fn path(&self, id: &str) -> Result<PathBuf, GitError> {
+    pub fn path(&self, id: &str) -> Result<PathBuf, AppError> {
         let registry = self
             .inner
             .lock()
@@ -77,13 +77,13 @@ impl Repositories {
             .by_id
             .get(id)
             .cloned()
-            .ok_or_else(|| GitError::invalid_input(format!("Repositorio desconocido: {id}")))
+            .ok_or_else(|| AppError::invalid_input(format!("Repositorio desconocido: {id}")))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::super::error::GitErrorKind;
+    use super::super::error::AppErrorKind;
     use super::super::testutil::{git, init_repo};
     use super::*;
 
@@ -102,7 +102,7 @@ mod tests {
     fn rejects_non_repository() {
         let dir = tempfile::tempdir().unwrap();
         let err = resolve_toplevel(dir.path()).unwrap_err();
-        assert_eq!(err.kind, GitErrorKind::NotARepository);
+        assert_eq!(err.kind, AppErrorKind::Git);
     }
 
     #[test]
@@ -110,7 +110,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         git(dir.path(), &["init", "-q", "--bare"]);
         let err = resolve_toplevel(dir.path()).unwrap_err();
-        assert_eq!(err.kind, GitErrorKind::BareRepository);
+        assert_eq!(err.kind, AppErrorKind::Validation);
     }
 
     #[test]

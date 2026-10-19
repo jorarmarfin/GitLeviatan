@@ -5,10 +5,10 @@ import { ErrorNotice } from "@/components/ErrorNotice";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
-import { api, errorDetail, errorMessage } from "@/lib/api";
+import { api, toAppError } from "@/lib/api";
 import { useRepositoryStore } from "@/stores/repository";
 import { useSettingsStore } from "@/stores/settings";
-import type { OperationError } from "@/types/git";
+import type { AppError } from "@/types/git";
 
 export const MIN_RECENT = 5;
 export const MAX_RECENT = 50;
@@ -23,7 +23,7 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
 
   const [gitPath, setGitPath] = useState(settings.gitPath ?? "");
   const [maxRecent, setMaxRecent] = useState(String(settings.maxRecentRepositories));
-  const [error, setError] = useState<OperationError | null>(null);
+  const [error, setError] = useState<AppError | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -60,7 +60,7 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
       await api.clearRecentRepositories();
       await loadRecents();
     } catch (e) {
-      setError({ message: errorMessage(e), detail: errorDetail(e) });
+      setError(toAppError(e));
     }
   }
 
@@ -137,7 +137,7 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
           </div>
         </div>
 
-        {error && <ErrorNotice error={error} />}
+        {error && <ErrorNotice error={error} title="No se pudo completar la operación" />}
         {saved && !error && (
           <p role="status" className="text-sm text-muted-foreground">
             Preferencias guardadas.

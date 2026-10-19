@@ -1,0 +1,7 @@
+{
+  "backend_list_commits_page_11k": { "maxMs": 500 },
+  "backend_get_status_11k": { "maxMs": 100 },
+  "frontend_layout_110k": { "maxMs": 600 },
+  "frontend_mount_110k": { "maxMs": 300 },
+  "frontend_scroll_event": { "maxMs": 40 }
+}

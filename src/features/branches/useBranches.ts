@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { api, errorDetail, errorMessage } from "@/lib/api";
-import type { OperationError, RepositoryRef } from "@/types/git";
+import { api, toAppError } from "@/lib/api";
+import type { AppError, RepositoryRef } from "@/types/git";
 
 import type { BranchInfo, DeleteBranchOutcome } from "./types";
 
@@ -12,9 +12,9 @@ export function useBranches(
   onChanged: () => void,
 ) {
   const [branches, setBranches] = useState<BranchInfo[] | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<AppError | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<OperationError | null>(null);
+  const [error, setError] = useState<AppError | null>(null);
 
   useEffect(() => {
     let current = true;
@@ -25,7 +25,7 @@ export function useBranches(
         setBranches(next);
         setLoadError(null);
       })
-      .catch((e: unknown) => current && setLoadError(errorMessage(e)));
+      .catch((e: unknown) => current && setLoadError(toAppError(e)));
     return () => {
       current = false;
     };
@@ -42,7 +42,7 @@ export function useBranches(
         onChanged();
         return true;
       } catch (e) {
-        setError({ message: errorMessage(e), detail: errorDetail(e) });
+        setError(toAppError(e));
         return false;
       } finally {
         setBusy(false);
@@ -72,7 +72,7 @@ export function useBranches(
         if (outcome.status === "deleted") onChanged();
         return outcome;
       } catch (e) {
-        setError({ message: errorMessage(e), detail: errorDetail(e) });
+        setError(toAppError(e));
         return null;
       } finally {
         setBusy(false);

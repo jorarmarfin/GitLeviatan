@@ -10,7 +10,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::git::error::GitError;
+use crate::git::error::AppError;
 use crate::git::process::check_git;
 
 pub const VERSION: u32 = 1;
@@ -47,8 +47,8 @@ impl Default for Settings {
     }
 }
 
-fn range_error() -> GitError {
-    GitError::invalid_input(format!(
+fn range_error() -> AppError {
+    AppError::invalid_input(format!(
         "El número de repositorios recientes debe estar entre {MIN_RECENT} y {MAX_RECENT}."
     ))
 }
@@ -56,9 +56,9 @@ fn range_error() -> GitError {
 impl Settings {
     /// Valida rangos y, si hay ruta de Git, comprueba que responde a `--version`.
     /// Devuelve los ajustes normalizados (ruta recortada; vacía = `None`).
-    pub fn validated(mut self) -> Result<Self, GitError> {
+    pub fn validated(mut self) -> Result<Self, AppError> {
         if self.version != VERSION {
-            return Err(GitError::invalid_input(
+            return Err(AppError::invalid_input(
                 "Versión de preferencias no soportada.",
             ));
         }
@@ -130,7 +130,7 @@ impl SettingsStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::git::error::GitErrorKind;
+    use crate::git::error::AppErrorKind;
 
     fn store() -> (tempfile::TempDir, SettingsStore) {
         let dir = tempfile::tempdir().unwrap();
@@ -214,7 +214,7 @@ mod tests {
             }
             .validated()
             .unwrap_err();
-            assert_eq!(err.kind, GitErrorKind::InvalidInput, "{bad}");
+            assert_eq!(err.kind, AppErrorKind::Validation, "{bad}");
         }
         for good in [5, 20, 50] {
             Settings {
@@ -234,7 +234,7 @@ mod tests {
         }
         .validated()
         .unwrap_err();
-        assert_eq!(err.kind, GitErrorKind::GitMissing);
+        assert_eq!(err.kind, AppErrorKind::Git);
     }
 
     #[test]
@@ -249,7 +249,7 @@ mod tests {
         }
         .validated()
         .unwrap_err();
-        assert_eq!(err.kind, GitErrorKind::InvalidInput);
+        assert_eq!(err.kind, AppErrorKind::Validation);
     }
 
     #[test]

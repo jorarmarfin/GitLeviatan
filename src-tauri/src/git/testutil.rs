@@ -39,3 +39,75 @@ pub fn init_bare() -> TempDir {
     git(dir.path(), &["init", "-q", "--bare", "-b", "main"]);
     dir
 }
+
+/// Repositorio sintético con historial ramificado (mismo patrón que `tests/perf/gen_repo.py`):
+/// un merge de una rama lateral cada 10 commits de `main`. Se genera con `git fast-import`.
+pub fn perf_repo(total: usize) -> TempDir {
+    use std::io::Write;
+    use std::process::Stdio;
+
+    let dir = init_repo();
+    let mut stream = String::with_capacity(total * 160);
+    let (mut ts, mut mark) = (1_700_000_000u64, 0u64);
+    let (mut main, mut side): (Option<u64>, Option<u64>) = (None, None);
+    let mut commit = |stream: &mut String, reference: &str, subject: &str, parents: &[u64]| {
+        mark += 1;
+        ts += 60;
+        let ident = "Perf <perf@example.com>";
+        stream.push_str(&format!(
+            "commit {reference}\nmark :{mark}\nauthor {ident} {ts} +0000\ncommitter {ident} {ts} +0000\ndata {}\n{subject}\n",
+            subject.len()
+        ));
+        if let Some(first) = parents.first() {
+            stream.push_str(&format!("from :{first}\n"));
+            for extra in &parents[1..] {
+                stream.push_str(&format!("merge :{extra}\n"));
+            }
+        }
+        stream.push('\n');
+        mark
+    };
+    for i in 1..=total {
+        if i % 10 == 5 {
+            if let Some(m) = main {
+                side = Some(commit(
+                    &mut stream,
+                    "refs/heads/side",
+                    &format!("side {i}"),
+                    &[m],
+                ));
+            }
+        }
+        let parents: Vec<u64> = match (i % 10 == 0, main, side) {
+            (true, Some(m), Some(s)) => vec![m, s],
+            (_, Some(m), _) => vec![m],
+            _ => vec![],
+        };
+        if i % 10 == 0 && side.is_some() {
+            side = None;
+        }
+        main = Some(commit(
+            &mut stream,
+            "refs/heads/main",
+            &format!("commit {i}"),
+            &parents,
+        ));
+    }
+    stream.push_str(&format!("reset refs/heads/main\nfrom :{}\n", main.unwrap()));
+
+    let mut child = Command::new("git")
+        .args(["fast-import", "--quiet"])
+        .current_dir(dir.path())
+        .stdin(Stdio::piped())
+        .spawn()
+        .expect("no se pudo ejecutar git fast-import");
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(stream.as_bytes())
+        .unwrap();
+    assert!(child.wait().unwrap().success(), "git fast-import falló");
+    git(dir.path(), &["checkout", "-q", "-f", "main"]);
+    dir
+}

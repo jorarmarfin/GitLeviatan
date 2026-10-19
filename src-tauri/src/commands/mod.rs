@@ -7,13 +7,12 @@ use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::git::branches;
 use crate::git::diff;
-use crate::git::error::GitError;
+use crate::git::error::AppError;
 use crate::git::operations;
 use crate::git::process::{check_git, set_git_path};
 use crate::git::remotes;
 use crate::git::repository::{self, Repositories};
 use crate::git::sync::{self, Operations, SyncContext};
-use crate::git::sync_error::SyncError;
 use crate::git::types::{
     BranchInfo, CommitDetail, CommitPage, CommitResult, DeleteBranchOutcome, DiffScope, FileDiff,
     RecentRepository, RemoteInfo, RepositoryRef, RepositoryStatus, SyncProgress,
@@ -29,14 +28,14 @@ pub fn ping() -> String {
 }
 
 /// Ejecuta trabajo bloqueante (procesos Git) fuera del hilo de la UI.
-async fn blocking<T, F>(work: F) -> Result<T, GitError>
+async fn blocking<T, F>(work: F) -> Result<T, AppError>
 where
     T: Send + 'static,
-    F: FnOnce() -> Result<T, GitError> + Send + 'static,
+    F: FnOnce() -> Result<T, AppError> + Send + 'static,
 {
     tauri::async_runtime::spawn_blocking(work)
         .await
-        .map_err(|error| GitError::internal(error.to_string()))?
+        .map_err(|error| AppError::internal(error.to_string()))?
 }
 
 /// Preferencias en memoria más el archivo donde se persisten. Un único escritor.
@@ -65,13 +64,13 @@ impl SettingsState {
     }
 }
 
-fn config_dir(app: &AppHandle) -> Result<PathBuf, GitError> {
+fn config_dir(app: &AppHandle) -> Result<PathBuf, AppError> {
     app.path()
         .app_config_dir()
-        .map_err(|error| GitError::internal(error.to_string()))
+        .map_err(|error| AppError::internal(error.to_string()))
 }
 
-fn recent_store(app: &AppHandle, settings: &SettingsState) -> Result<RecentStore, GitError> {
+fn recent_store(app: &AppHandle, settings: &SettingsState) -> Result<RecentStore, AppError> {
     let limit = settings.get().max_recent_repositories as usize;
     Ok(RecentStore::new(
         config_dir(app)?.join("recent.json"),
@@ -85,7 +84,7 @@ pub async fn open_repository(
     repositories: State<'_, Repositories>,
     settings: State<'_, SettingsState>,
     path: String,
-) -> Result<RepositoryRef, GitError> {
+) -> Result<RepositoryRef, AppError> {
     open_path(&app, &repositories, &settings, path).await
 }
 
@@ -94,7 +93,7 @@ async fn open_path(
     repositories: &Repositories,
     settings: &SettingsState,
     path: String,
-) -> Result<RepositoryRef, GitError> {
+) -> Result<RepositoryRef, AppError> {
     let top = blocking(move || repository::resolve_toplevel(Path::new(&path))).await?;
     let repo = repositories.register(top);
 
@@ -116,7 +115,7 @@ async fn open_path(
 pub async fn list_recent_repositories(
     app: AppHandle,
     settings: State<'_, SettingsState>,
-) -> Result<Vec<RecentRepository>, GitError> {
+) -> Result<Vec<RecentRepository>, AppError> {
     let store = recent_store(&app, &settings)?;
     blocking(move || Ok(store.load())).await
 }
@@ -125,9 +124,9 @@ pub async fn list_recent_repositories(
 pub async fn clear_recent_repositories(
     app: AppHandle,
     settings: State<'_, SettingsState>,
-) -> Result<(), GitError> {
+) -> Result<(), AppError> {
     let store = recent_store(&app, &settings)?;
-    blocking(move || store.clear().map_err(GitError::io)).await
+    blocking(move || store.clear().map_err(AppError::io)).await
 }
 
 #[tauri::command]
@@ -142,10 +141,10 @@ pub async fn update_settings(
     app: AppHandle,
     settings: State<'_, SettingsState>,
     new_settings: Settings,
-) -> Result<Settings, GitError> {
+) -> Result<Settings, AppError> {
     let validated = blocking(move || new_settings.validated()).await?;
     let mut current = settings.current.lock().expect("preferencias envenenadas");
-    settings.store.save(&validated).map_err(GitError::io)?;
+    settings.store.save(&validated).map_err(AppError::io)?;
     set_git_path(validated.git_path.clone().map(PathBuf::from));
     *current = validated.clone();
     drop(current);
@@ -189,7 +188,7 @@ pub async fn detect_git() -> GitInfo {
 pub async fn get_status(
     repositories: State<'_, Repositories>,
     repository_id: String,
-) -> Result<RepositoryStatus, GitError> {
+) -> Result<RepositoryStatus, AppError> {
     let path = repositories.path(&repository_id)?;
     blocking(move || operations::get_status(&path)).await
 }
@@ -200,7 +199,7 @@ pub async fn list_commits(
     repository_id: String,
     cursor: Option<String>,
     limit: usize,
-) -> Result<CommitPage, GitError> {
+) -> Result<CommitPage, AppError> {
     let path = repositories.path(&repository_id)?;
     blocking(move || operations::list_commits(&path, cursor.as_deref(), limit)).await
 }
@@ -210,7 +209,7 @@ pub async fn get_commit(
     repositories: State<'_, Repositories>,
     repository_id: String,
     oid: String,
-) -> Result<CommitDetail, GitError> {
+) -> Result<CommitDetail, AppError> {
     let path = repositories.path(&repository_id)?;
     blocking(move || operations::get_commit(&path, &oid)).await
 }
@@ -220,7 +219,7 @@ pub async fn stage_files(
     repositories: State<'_, Repositories>,
     repository_id: String,
     paths: Vec<String>,
-) -> Result<(), GitError> {
+) -> Result<(), AppError> {
     let repo = repositories.path(&repository_id)?;
     blocking(move || write::stage_files(&repo, &paths)).await
 }
@@ -230,7 +229,7 @@ pub async fn unstage_files(
     repositories: State<'_, Repositories>,
     repository_id: String,
     paths: Vec<String>,
-) -> Result<(), GitError> {
+) -> Result<(), AppError> {
     let repo = repositories.path(&repository_id)?;
     blocking(move || write::unstage_files(&repo, &paths)).await
 }
@@ -241,7 +240,7 @@ pub async fn get_diff(
     repository_id: String,
     path: String,
     scope: DiffScope,
-) -> Result<FileDiff, GitError> {
+) -> Result<FileDiff, AppError> {
     let repo = repositories.path(&repository_id)?;
     blocking(move || diff::get_diff(&repo, &path, scope)).await
 }
@@ -251,7 +250,7 @@ pub async fn create_commit(
     repositories: State<'_, Repositories>,
     repository_id: String,
     message: String,
-) -> Result<CommitResult, GitError> {
+) -> Result<CommitResult, AppError> {
     let repo = repositories.path(&repository_id)?;
     blocking(move || write::create_commit(&repo, &message)).await
 }
@@ -260,7 +259,7 @@ pub async fn create_commit(
 pub async fn list_branches(
     repositories: State<'_, Repositories>,
     repository_id: String,
-) -> Result<Vec<BranchInfo>, GitError> {
+) -> Result<Vec<BranchInfo>, AppError> {
     let repo = repositories.path(&repository_id)?;
     blocking(move || branches::list_branches(&repo)).await
 }
@@ -271,7 +270,7 @@ pub async fn create_branch(
     repository_id: String,
     name: String,
     start_point: Option<String>,
-) -> Result<(), GitError> {
+) -> Result<(), AppError> {
     let repo = repositories.path(&repository_id)?;
     blocking(move || branches::create_branch(&repo, &name, start_point.as_deref())).await
 }
@@ -281,7 +280,7 @@ pub async fn checkout_branch(
     repositories: State<'_, Repositories>,
     repository_id: String,
     branch: String,
-) -> Result<(), GitError> {
+) -> Result<(), AppError> {
     let repo = repositories.path(&repository_id)?;
     blocking(move || branches::checkout_branch(&repo, &branch)).await
 }
@@ -292,7 +291,7 @@ pub async fn delete_branch(
     repository_id: String,
     branch: String,
     force: bool,
-) -> Result<DeleteBranchOutcome, GitError> {
+) -> Result<DeleteBranchOutcome, AppError> {
     let repo = repositories.path(&repository_id)?;
     blocking(move || branches::delete_branch(&repo, &branch, force)).await
 }
@@ -301,17 +300,17 @@ pub async fn delete_branch(
 pub async fn list_remotes(
     repositories: State<'_, Repositories>,
     repository_id: String,
-) -> Result<Vec<RemoteInfo>, GitError> {
+) -> Result<Vec<RemoteInfo>, AppError> {
     let repo = repositories.path(&repository_id)?;
     blocking(move || remotes::list_remotes(&repo)).await
 }
 
 /// Registra la operación, la ejecuta fuera del hilo de la UI emitiendo `sync-progress`
 /// y la da de baja al terminar (con o sin error).
-async fn run_sync<T, F>(app: &AppHandle, operations: &Operations, work: F) -> Result<T, SyncError>
+async fn run_sync<T, F>(app: &AppHandle, operations: &Operations, work: F) -> Result<T, AppError>
 where
     T: Send + 'static,
-    F: FnOnce(&mut SyncContext) -> Result<T, SyncError> + Send + 'static,
+    F: FnOnce(&mut SyncContext) -> Result<T, AppError> + Send + 'static,
 {
     let (id, operation) = operations.start();
     let handle = app.clone();
@@ -329,7 +328,7 @@ where
     })
     .await;
     operations.finish(&id);
-    joined.map_err(|error| SyncError::invalid_input(error.to_string()))?
+    joined.map_err(|error| AppError::invalid_input(error.to_string()))?
 }
 
 #[tauri::command]
@@ -339,7 +338,7 @@ pub async fn fetch(
     operations: State<'_, Operations>,
     repository_id: String,
     remote: String,
-) -> Result<(), SyncError> {
+) -> Result<(), AppError> {
     let repo = repositories.path(&repository_id)?;
     run_sync(&app, &operations, move |ctx| {
         sync::fetch(&repo, &remote, ctx)
@@ -355,7 +354,7 @@ pub async fn pull(
     repository_id: String,
     remote: String,
     branch: String,
-) -> Result<(), SyncError> {
+) -> Result<(), AppError> {
     let repo = repositories.path(&repository_id)?;
     run_sync(&app, &operations, move |ctx| {
         sync::pull(&repo, &remote, &branch, ctx)
@@ -371,7 +370,7 @@ pub async fn push(
     repository_id: String,
     remote: String,
     branch: String,
-) -> Result<(), SyncError> {
+) -> Result<(), AppError> {
     let repo = repositories.path(&repository_id)?;
     run_sync(&app, &operations, move |ctx| {
         sync::push(&repo, &remote, &branch, ctx)
@@ -388,10 +387,10 @@ pub async fn clone_repository(
     settings: State<'_, SettingsState>,
     url: String,
     dest_dir: String,
-) -> Result<RepositoryRef, SyncError> {
+) -> Result<RepositoryRef, AppError> {
     let dest = std::path::PathBuf::from(&dest_dir);
     run_sync(&app, &operations, move |ctx| sync::clone(&url, &dest, ctx)).await?;
-    Ok(open_path(&app, &repositories, &settings, dest_dir).await?)
+    open_path(&app, &repositories, &settings, dest_dir).await
 }
 
 /// Cancela una operación en curso; no falla si ya terminó.

@@ -65,7 +65,7 @@ export function CreateBranchDialog({ selectedOid, busy, error, onCreate, onClose
           )}
         </fieldset>
 
-        {error && <ErrorNotice error={error} />}
+        {error && <ErrorNotice error={error} title="No se pudo crear la rama" />}
 
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" size="sm" onClick={onClose}>

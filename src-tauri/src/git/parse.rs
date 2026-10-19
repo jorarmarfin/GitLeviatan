@@ -1,8 +1,8 @@
-use super::error::GitError;
+use super::error::AppError;
 use super::types::{ChangeKind, ChangedFile, CommitDetail, CommitNode, RepositoryStatus};
 
-fn parse_error(what: &str, record: &str) -> GitError {
-    GitError::internal(format!("Salida de Git inesperada ({what}): {record:?}"))
+fn parse_error(what: &str, record: &str) -> AppError {
+    AppError::internal(format!("Salida de Git inesperada ({what}): {record:?}"))
 }
 
 fn kind_of(code: char) -> ChangeKind {
@@ -42,7 +42,7 @@ fn push_xy(status: &mut RepositoryStatus, xy: &str, path: &str, orig: Option<&st
 }
 
 /// Parsea `git status --porcelain=v2 -z --branch`.
-pub fn parse_status(output: &[u8]) -> Result<RepositoryStatus, GitError> {
+pub fn parse_status(output: &[u8]) -> Result<RepositoryStatus, AppError> {
     let mut status = RepositoryStatus::default();
     let mut records = output.split(|byte| *byte == 0).filter(|r| !r.is_empty());
 
@@ -102,7 +102,7 @@ pub fn parse_status(output: &[u8]) -> Result<RepositoryStatus, GitError> {
 pub const LOG_FORMAT: &str = "--format=%H%x00%h%x00%P%x00%an%x00%aI%x00%s%x00%D%x1e";
 
 /// Parsea la salida de `git log` con `LOG_FORMAT`.
-pub fn parse_log(output: &[u8]) -> Result<Vec<CommitNode>, GitError> {
+pub fn parse_log(output: &[u8]) -> Result<Vec<CommitNode>, AppError> {
     let text = String::from_utf8_lossy(output);
     let mut commits = Vec::new();
 
@@ -145,7 +145,7 @@ fn split_refs(decorations: &str) -> Vec<String> {
 }
 
 /// Parsea la salida de `git log -1` con `DETAIL_FORMAT`.
-pub fn parse_commit_detail(output: &[u8]) -> Result<CommitDetail, GitError> {
+pub fn parse_commit_detail(output: &[u8]) -> Result<CommitDetail, AppError> {
     let text = String::from_utf8_lossy(output);
     let fields: Vec<&str> = text.splitn(10, '\0').collect();
     if fields.len() != 10 {

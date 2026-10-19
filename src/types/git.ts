@@ -31,7 +31,11 @@ export type CommitPage = { commits: CommitNode[]; nextCursor: string | null };
 
 export type RecentRepository = { path: string; name: string; lastOpenedAt: string };
 
-export type GitErrorPayload = { kind: string; message: string; detail: string | null };
+export type AppErrorKind =
+  "git" | "auth" | "network" | "validation" | "io" | "notFound" | "cancelled" | "internal";
+
+/** Error de cualquier comando (espejo de `AppError` en Rust). `detail` es el stderr saneado. */
+export type AppError = { kind: AppErrorKind; message: string; detail: string | null };
 
 export type DiffScope = "staged" | "unstaged";
 
@@ -53,19 +57,6 @@ export type RemoteInfo = { name: string; fetchUrl: string; pushUrl: string };
 export type SyncPhase = "counting" | "receiving" | "resolving" | "sending" | "done";
 
 export type SyncProgress = { operationId: string; phase: SyncPhase; percent: number | null };
-
-export type SyncErrorKind =
-  | "auth"
-  | "network"
-  | "nonFastForward"
-  | "conflict"
-  | "permission"
-  | "remoteNotFound"
-  | "cancelled"
-  | "unknown";
-
-/** Fallo de fetch/pull/push/clone, ya clasificado por el backend. */
-export type SyncFailure = { kind: SyncErrorKind; message: string; detail: string | null };
 
 /** Espejo de `storage/settings.rs`. */
 export type Settings = {

@@ -4,8 +4,9 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+use super::error::AppError;
 use super::process::{run_git, run_git_streaming, Operation, StreamOutput};
-use super::sync_error::SyncError;
+use super::sync_error::app_error_from_stderr;
 use super::types::{SyncPhase, SyncProgress};
 
 /// Operaciones en curso, para poder cancelarlas por `operationId`.
@@ -72,7 +73,7 @@ impl SyncContext<'_> {
     }
 
     /// Ejecuta Git retransmitiendo el progreso. Devuelve el stdout si terminó bien.
-    fn run(&mut self, dir: &Path, args: &[&str]) -> Result<Vec<u8>, SyncError> {
+    fn run(&mut self, dir: &Path, args: &[&str]) -> Result<Vec<u8>, AppError> {
         // Primer evento inmediato: el frontend aprende el `operationId` para poder cancelar.
         self.progress(SyncPhase::Counting, None);
         let id = self.operation_id.to_string();
@@ -90,12 +91,12 @@ impl SyncContext<'_> {
     }
 }
 
-fn finish(ctx: &mut SyncContext, output: StreamOutput) -> Result<Vec<u8>, SyncError> {
+fn finish(ctx: &mut SyncContext, output: StreamOutput) -> Result<Vec<u8>, AppError> {
     if output.cancelled {
-        return Err(SyncError::cancelled());
+        return Err(AppError::cancelled());
     }
     if !output.success {
-        return Err(SyncError::from_stderr(&output.stderr));
+        return Err(app_error_from_stderr(&output.stderr));
     }
     ctx.progress(SyncPhase::Done, Some(100));
     Ok(output.stdout)
@@ -130,16 +131,16 @@ pub fn parse_progress(line: &str) -> Option<(SyncPhase, Option<u8>)> {
 }
 
 /// Nombres de remoto y de rama que Git no interpretará como opción.
-fn check_ref_arg(kind: &str, value: &str) -> Result<(), SyncError> {
+fn check_ref_arg(kind: &str, value: &str) -> Result<(), AppError> {
     if value.trim().is_empty() || value.starts_with('-') || value.contains(char::is_whitespace) {
-        return Err(SyncError::invalid_input(format!(
+        return Err(AppError::invalid_input(format!(
             "El {kind} «{value}» no es válido."
         )));
     }
     Ok(())
 }
 
-pub fn fetch(repo: &Path, remote: &str, ctx: &mut SyncContext) -> Result<(), SyncError> {
+pub fn fetch(repo: &Path, remote: &str, ctx: &mut SyncContext) -> Result<(), AppError> {
     check_ref_arg("remoto", remote)?;
     ctx.run(repo, &["fetch", "--progress", remote]).map(|_| ())
 }
@@ -150,7 +151,7 @@ pub fn pull(
     remote: &str,
     branch: &str,
     ctx: &mut SyncContext,
-) -> Result<(), SyncError> {
+) -> Result<(), AppError> {
     check_ref_arg("remoto", remote)?;
     check_ref_arg("nombre de rama", branch)?;
     ctx.run(repo, &["pull", "--ff-only", "--progress", remote, branch])
@@ -163,7 +164,7 @@ pub fn push(
     remote: &str,
     branch: &str,
     ctx: &mut SyncContext,
-) -> Result<(), SyncError> {
+) -> Result<(), AppError> {
     check_ref_arg("remoto", remote)?;
     check_ref_arg("nombre de rama", branch)?;
     let has_upstream = run_git(
@@ -185,25 +186,25 @@ pub fn push(
 
 /// Clona `url` en `dest` (que no debe existir o estar vacío). Si se cancela o falla,
 /// se elimina el directorio parcial que se haya creado.
-pub fn clone(url: &str, dest: &Path, ctx: &mut SyncContext) -> Result<(), SyncError> {
+pub fn clone(url: &str, dest: &Path, ctx: &mut SyncContext) -> Result<(), AppError> {
     if url.trim().is_empty() || url.starts_with('-') {
-        return Err(SyncError::invalid_input(
+        return Err(AppError::invalid_input(
             "La URL del repositorio no es válida.",
         ));
     }
     let existed = dest.exists();
     if existed && !dest.is_dir() {
-        return Err(SyncError::invalid_input("La carpeta destino no es válida."));
+        return Err(AppError::invalid_input("La carpeta destino no es válida."));
     }
     if existed && std::fs::read_dir(dest).map_or(true, |mut d| d.next().is_some()) {
-        return Err(SyncError::invalid_input(
+        return Err(AppError::invalid_input(
             "La carpeta destino ya existe y no está vacía.",
         ));
     }
     let parent = dest
         .parent()
-        .ok_or_else(|| SyncError::invalid_input("La carpeta destino no es válida."))?;
-    std::fs::create_dir_all(parent).map_err(|e| SyncError::invalid_input(e.to_string()))?;
+        .ok_or_else(|| AppError::invalid_input("La carpeta destino no es válida."))?;
+    std::fs::create_dir_all(parent).map_err(|e| AppError::invalid_input(e.to_string()))?;
 
     let dest_arg = dest.to_string_lossy();
     let result = ctx.run(parent, &["clone", "--progress", "--", url, &dest_arg]);
@@ -229,7 +230,7 @@ pub fn clone(url: &str, dest: &Path, ctx: &mut SyncContext) -> Result<(), SyncEr
 
 #[cfg(test)]
 mod tests {
-    use super::super::sync_error::SyncErrorKind;
+    use super::super::error::AppErrorKind;
     use super::super::testutil::{commit_file, git, init_bare, init_repo};
     use super::*;
 
@@ -343,7 +344,7 @@ mod tests {
         commit_file(local.path(), "a.txt", "x\n", "c");
         let op = Operation::default();
         let (result, _) = with_ctx(&op, |ctx| fetch(local.path(), "nope", ctx));
-        assert_eq!(result.unwrap_err().kind, SyncErrorKind::RemoteNotFound);
+        assert_eq!(result.unwrap_err().kind, AppErrorKind::NotFound);
     }
 
     #[test]
@@ -356,7 +357,7 @@ mod tests {
         );
         let op = Operation::default();
         let (result, _) = with_ctx(&op, |ctx| fetch(local.path(), "origin", ctx));
-        assert_eq!(result.unwrap_err().kind, SyncErrorKind::RemoteNotFound);
+        assert_eq!(result.unwrap_err().kind, AppErrorKind::NotFound);
     }
 
     #[test]
@@ -374,7 +375,7 @@ mod tests {
         let op = Operation::default();
         op.cancel();
         let (result, _) = with_ctx(&op, |ctx| fetch(local.path(), "origin", ctx));
-        assert_eq!(result.unwrap_err().kind, SyncErrorKind::Cancelled);
+        assert_eq!(result.unwrap_err().kind, AppErrorKind::Cancelled);
     }
 
     #[test]
@@ -401,7 +402,12 @@ mod tests {
         let (result, _) = with_ctx(&op, |ctx| pull(local.path(), "origin", "main", ctx));
         let err = result.unwrap_err();
 
-        assert_eq!(err.kind, SyncErrorKind::NonFastForward);
+        assert_eq!(err.kind, AppErrorKind::Git);
+        assert!(
+            err.message.contains("cambios que no tienes"),
+            "{}",
+            err.message
+        );
         assert_eq!(rev(local.path(), "HEAD"), head);
         assert!(!local.path().join("b.txt").exists());
     }
@@ -463,7 +469,12 @@ mod tests {
         let (result, _) = with_ctx(&op, |ctx| push(local.path(), "origin", "main", ctx));
         let err = result.unwrap_err();
 
-        assert_eq!(err.kind, SyncErrorKind::NonFastForward);
+        assert_eq!(err.kind, AppErrorKind::Git);
+        assert!(
+            err.message.contains("cambios que no tienes"),
+            "{}",
+            err.message
+        );
         assert_eq!(rev(remote.path(), "main"), remote_head);
     }
 
@@ -499,7 +510,7 @@ mod tests {
         let dest = parent.path().join("copia");
         let op = Operation::default();
         let (result, _) = with_ctx(&op, |ctx| clone("/no/existe/gitleviatan", &dest, ctx));
-        assert_eq!(result.unwrap_err().kind, SyncErrorKind::RemoteNotFound);
+        assert_eq!(result.unwrap_err().kind, AppErrorKind::NotFound);
         assert!(!dest.exists());
     }
 
@@ -513,8 +524,8 @@ mod tests {
             clone("http://usuario:secreto123@127.0.0.1:1/r.git", &dest, ctx)
         });
         let err = result.unwrap_err();
-        assert_eq!(err.kind, SyncErrorKind::Network);
-        assert!(!err.detail.contains("secreto123"));
+        assert_eq!(err.kind, AppErrorKind::Network);
+        assert!(!err.detail.unwrap_or_default().contains("secreto123"));
         assert!(!err.message.contains("secreto123"));
     }
 }

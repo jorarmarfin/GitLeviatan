@@ -61,9 +61,9 @@ export function BranchesPanel({ repository, selectedOid, externalVersion, onChan
 
   if (loadError) {
     return (
-      <p role="alert" className="px-2 text-sm text-destructive">
-        {loadError}
-      </p>
+      <div className="px-2">
+        <ErrorNotice error={loadError} title="No se pudieron cargar las ramas" />
+      </div>
     );
   }
   if (!branches) return <p className="px-2 text-sm">Cargando ramas…</p>;
@@ -89,7 +89,7 @@ export function BranchesPanel({ repository, selectedOid, externalVersion, onChan
       {/* Mientras hay un diálogo abierto, el error se muestra dentro de él. */}
       {error && !dialog && (
         <div className="px-2">
-          <ErrorNotice error={error} />
+          <ErrorNotice error={error} title="No se pudo completar la operación con la rama" />
         </div>
       )}
 

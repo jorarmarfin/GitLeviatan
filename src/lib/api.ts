@@ -7,22 +7,21 @@ import type {
   CommitResult,
   DiffScope,
   FileDiff,
-  GitErrorPayload,
+  AppError,
+  AppErrorKind,
   GitInfo,
   RecentRepository,
   RemoteInfo,
   RepositoryRef,
   RepositoryStatus,
   Settings,
-  SyncErrorKind,
-  SyncFailure,
 } from "@/types/git";
 
 /** Convierte lo que lance `invoke` (error serializado de Rust o cualquier cosa) en texto. */
 export function errorMessage(error: unknown): string {
   if (typeof error === "string") return error;
   if (error && typeof error === "object" && "message" in error) {
-    return String((error as GitErrorPayload).message);
+    return String((error as AppError).message);
   }
   return "Error desconocido";
 }
@@ -30,30 +29,30 @@ export function errorMessage(error: unknown): string {
 /** Detalle técnico (stderr de Git o de un hook) cuando el error lo trae. */
 export function errorDetail(error: unknown): string | null {
   if (error && typeof error === "object" && "detail" in error) {
-    const detail = (error as GitErrorPayload).detail;
+    const detail = (error as AppError).detail;
     return typeof detail === "string" && detail.trim() !== "" ? detail : null;
   }
   return null;
 }
 
-const SYNC_ERROR_KINDS: readonly SyncErrorKind[] = [
+const APP_ERROR_KINDS: readonly AppErrorKind[] = [
+  "git",
   "auth",
   "network",
-  "nonFastForward",
-  "conflict",
-  "permission",
-  "remoteNotFound",
+  "validation",
+  "io",
+  "notFound",
   "cancelled",
-  "unknown",
+  "internal",
 ];
 
-/** Normaliza lo que lance una operación de red a un fallo clasificado. */
-export function syncFailure(error: unknown): SyncFailure {
+/** Normaliza lo que lance `invoke` (un `AppError` o cualquier otra cosa) a un `AppError`. */
+export function toAppError(error: unknown): AppError {
   const kind =
     error && typeof error === "object" && "kind" in error
-      ? SYNC_ERROR_KINDS.find((k) => k === (error as GitErrorPayload).kind)
+      ? APP_ERROR_KINDS.find((k) => k === (error as AppError).kind)
       : undefined;
-  return { kind: kind ?? "unknown", message: errorMessage(error), detail: errorDetail(error) };
+  return { kind: kind ?? "internal", message: errorMessage(error), detail: errorDetail(error) };
 }
 
 export const api = {

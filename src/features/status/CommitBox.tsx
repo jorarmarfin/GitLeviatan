@@ -30,16 +30,22 @@ export function CommitBox({ stagedCount, busy, error, onCommit }: Props) {
     >
       <textarea
         aria-label="Mensaje de commit"
-        placeholder="Mensaje del commit"
+        placeholder="Mensaje del commit (Ctrl+Enter para commitear)"
         value={message}
         onChange={(event) => setMessage(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && (event.ctrlKey || event.metaKey) && canCommit) {
+            event.preventDefault();
+            void submit();
+          }
+        }}
         rows={3}
         className="w-full resize-none rounded-md border border-input bg-background p-2 text-sm"
       />
       <Button type="submit" size="sm" disabled={!canCommit}>
         {busy ? "Trabajando…" : `Commit (${stagedCount})`}
       </Button>
-      {error && <ErrorNotice error={error} />}
+      {error && <ErrorNotice error={error} title="No se pudo crear el commit" />}
     </form>
   );
 }

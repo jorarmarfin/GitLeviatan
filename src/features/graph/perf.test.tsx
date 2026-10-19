@@ -1,8 +1,11 @@
-// Medición manual (no corre en CI): `PERF=1 pnpm vitest run src/features/graph/perf.test.tsx`
-// Los resultados se anotan en docs/performance.md.
+// Dos partes:
+// - «umbrales»: corre siempre (también en CI) y compara con tests/perf/thresholds.json.
+// - «rendimiento del grafo»: medición manual con `PERF=1 pnpm vitest run
+//   src/features/graph/perf.test.tsx --silent=false`; los resultados van a docs/performance.md.
 import { describe, expect, it } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 
+import thresholds from "../../../tests/perf/thresholds.json";
 import type { CommitNode } from "@/types/git";
 
 import { GraphView } from "./GraphView";
@@ -46,6 +49,61 @@ function syntheticHistory(total: number): CommitNode[] {
 
 const ms = (t0: number) => (performance.now() - t0).toFixed(1);
 
+function mountGraph(commits: CommitNode[], rows: ReturnType<typeof computeGraphRows>["rows"]) {
+  return render(
+    <GraphView
+      commits={commits}
+      rows={rows}
+      selectedOid={null}
+      onSelect={() => {}}
+      hasMore={false}
+      loadingMore={false}
+      onLoadMore={() => {}}
+    />,
+  );
+}
+
+/** Mejor de 3 intentos: el ruido del CI no debe dar falsos positivos. */
+function best(work: () => void): number {
+  let min = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < 3; i++) {
+    const t0 = performance.now();
+    work();
+    min = Math.min(min, performance.now() - t0);
+  }
+  return min;
+}
+
+describe("umbrales de rendimiento (tests/perf/thresholds.json)", () => {
+  const commits = syntheticHistory(100_000);
+
+  it("el layout, el montaje y el scroll del grafo respetan los umbrales", () => {
+    const layout = best(() => void computeGraphRows(commits));
+    const { rows } = computeGraphRows(commits);
+
+    const mount = best(() => mountGraph(commits, rows).unmount());
+
+    const { unmount } = mountGraph(commits, rows);
+    const list = screen.getByRole("listbox");
+    const steps = 200;
+    const scroll =
+      best(() => {
+        for (let i = 1; i <= steps; i++) {
+          list.scrollTop = i * 28 * 7;
+          fireEvent.scroll(list);
+        }
+      }) / steps;
+    unmount();
+
+    console.info(
+      `PERF umbrales layout=${layout.toFixed(1)}ms montaje=${mount.toFixed(1)}ms scroll=${scroll.toFixed(2)}ms/evento`,
+    );
+    expect(layout).toBeLessThanOrEqual(thresholds.frontend_layout_110k.maxMs);
+    expect(mount).toBeLessThanOrEqual(thresholds.frontend_mount_110k.maxMs);
+    expect(scroll).toBeLessThanOrEqual(thresholds.frontend_scroll_event.maxMs);
+  }, 60_000);
+});
+
 describe.skipIf(!process.env.PERF)("rendimiento del grafo", () => {
   for (const total of [1_000, 10_000, 100_000]) {
     it(`${total} commits`, () => {
@@ -56,17 +114,7 @@ describe.skipIf(!process.env.PERF)("rendimiento del grafo", () => {
       const layoutMs = ms(t0);
 
       t0 = performance.now();
-      const { unmount } = render(
-        <GraphView
-          commits={commits}
-          rows={rows}
-          selectedOid={null}
-          onSelect={() => {}}
-          hasMore={false}
-          loadingMore={false}
-          onLoadMore={() => {}}
-        />,
-      );
+      const { unmount } = mountGraph(commits, rows);
       const mountMs = ms(t0);
       const mounted = screen.getAllByRole("option").length;
 

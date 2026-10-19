@@ -2,14 +2,14 @@
 
 use std::path::{Component, Path};
 
-use super::error::GitError;
+use super::error::AppError;
 use super::process::{run_git, run_git_with_input};
 use super::types::CommitResult;
 
 /// Rechaza rutas vacías, con NUL, absolutas o que salgan del repositorio.
-pub fn validate_relative_path(path: &str) -> Result<(), GitError> {
+pub fn validate_relative_path(path: &str) -> Result<(), AppError> {
     if path.is_empty() || path.contains('\0') {
-        return Err(GitError::invalid_input("Ruta de archivo inválida."));
+        return Err(AppError::invalid_input("Ruta de archivo inválida."));
     }
     let candidate = Path::new(path);
     let escapes = candidate.is_absolute()
@@ -17,21 +17,21 @@ pub fn validate_relative_path(path: &str) -> Result<(), GitError> {
             .components()
             .any(|c| matches!(c, Component::ParentDir | Component::Prefix(_)));
     if escapes {
-        return Err(GitError::invalid_input(format!(
+        return Err(AppError::invalid_input(format!(
             "La ruta debe ser relativa al repositorio: {path}"
         )));
     }
     Ok(())
 }
 
-fn validate_paths(paths: &[String]) -> Result<(), GitError> {
+fn validate_paths(paths: &[String]) -> Result<(), AppError> {
     if paths.is_empty() {
-        return Err(GitError::invalid_input("No se indicó ningún archivo."));
+        return Err(AppError::invalid_input("No se indicó ningún archivo."));
     }
     paths.iter().try_for_each(|p| validate_relative_path(p))
 }
 
-pub fn stage_files(repo: &Path, paths: &[String]) -> Result<(), GitError> {
+pub fn stage_files(repo: &Path, paths: &[String]) -> Result<(), AppError> {
     validate_paths(paths)?;
     let mut args = vec!["add".to_string(), "--".to_string()];
     args.extend(paths.iter().cloned());
@@ -42,7 +42,7 @@ fn has_head(repo: &Path) -> bool {
     run_git(repo, ["rev-parse", "--verify", "--quiet", "HEAD"]).is_ok()
 }
 
-pub fn unstage_files(repo: &Path, paths: &[String]) -> Result<(), GitError> {
+pub fn unstage_files(repo: &Path, paths: &[String]) -> Result<(), AppError> {
     validate_paths(paths)?;
     // Sin commits no existe HEAD al que restaurar: se quita la entrada del índice.
     let mut args: Vec<String> = if has_head(repo) {
@@ -60,15 +60,15 @@ pub fn unstage_files(repo: &Path, paths: &[String]) -> Result<(), GitError> {
     run_git(repo, args).map(|_| ())
 }
 
-pub fn create_commit(repo: &Path, message: &str) -> Result<CommitResult, GitError> {
+pub fn create_commit(repo: &Path, message: &str) -> Result<CommitResult, AppError> {
     if message.trim().is_empty() {
-        return Err(GitError::invalid_input(
+        return Err(AppError::invalid_input(
             "El mensaje del commit no puede estar vacío.",
         ));
     }
     let staged = run_git(repo, ["diff", "--cached", "--name-only", "-z"])?;
     if staged.stdout.is_empty() {
-        return Err(GitError::invalid_input(
+        return Err(AppError::invalid_input(
             "No hay cambios preparados (staged) para confirmar.",
         ));
     }
@@ -86,7 +86,7 @@ pub fn create_commit(repo: &Path, message: &str) -> Result<CommitResult, GitErro
     let (oid, short_oid) = text
         .trim_end()
         .split_once('\0')
-        .ok_or_else(|| GitError::internal("No se pudo leer el commit creado."))?;
+        .ok_or_else(|| AppError::internal("No se pudo leer el commit creado."))?;
     Ok(CommitResult {
         oid: oid.to_string(),
         short_oid: short_oid.to_string(),
@@ -96,7 +96,7 @@ pub fn create_commit(repo: &Path, message: &str) -> Result<CommitResult, GitErro
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::git::error::GitErrorKind;
+    use crate::git::error::AppErrorKind;
     use crate::git::operations::{get_status, list_commits};
     use crate::git::testutil::{commit_file, git, init_repo};
 
@@ -200,7 +200,7 @@ mod tests {
         for bad in ["", "/etc/passwd", "../fuera.txt", "a/../../b"] {
             assert_eq!(
                 stage_files(repo.path(), &paths(&[bad])).unwrap_err().kind,
-                GitErrorKind::InvalidInput,
+                AppErrorKind::Validation,
                 "{bad}"
             );
         }
@@ -248,7 +248,7 @@ mod tests {
         std::fs::write(repo.path().join("a.txt"), "x").unwrap();
         assert!(create_commit(repo.path(), "   \n").is_err());
         let err = create_commit(repo.path(), "sin nada preparado").unwrap_err();
-        assert_eq!(err.kind, GitErrorKind::InvalidInput);
+        assert_eq!(err.kind, AppErrorKind::Validation);
         assert!(list_commits(repo.path(), None, 10)
             .unwrap()
             .commits
@@ -272,7 +272,7 @@ mod tests {
         stage_files(repo.path(), &paths(&["a.txt"])).unwrap();
         let err = create_commit(repo.path(), "intento").unwrap_err();
 
-        assert_eq!(err.kind, GitErrorKind::Command);
+        assert_eq!(err.kind, AppErrorKind::Git);
         assert!(err.detail.unwrap().contains("el hook rechazó el commit"));
         assert!(list_commits(repo.path(), None, 10)
             .unwrap()
