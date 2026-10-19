@@ -65,7 +65,7 @@ const GraphRowView = memo(function GraphRowView({
       style={{ position: "absolute", top, left: 0, right: 0, height: ROW_HEIGHT }}
       className={cn(
         "flex cursor-pointer items-center gap-2 px-2 text-sm hover:bg-accent/60",
-        selected && "bg-accent",
+        selected && "bg-selected",
       )}
     >
       <svg width={graphWidth} height={ROW_HEIGHT} aria-hidden="true" className="shrink-0">

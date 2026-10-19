@@ -7,7 +7,8 @@ import type { OperationError } from "@/types/git";
 type Props = {
   stagedCount: number;
   busy: boolean;
-  error: OperationError | null;
+  /** `context` dice qué operación falló («No se pudo preparar todo»). */
+  error: (OperationError & { context?: string }) | null;
   onCommit: (message: string) => Promise<boolean>;
 };
 
@@ -45,7 +46,9 @@ export function CommitBox({ stagedCount, busy, error, onCommit }: Props) {
       <Button type="submit" size="sm" disabled={!canCommit}>
         {busy ? "Trabajando…" : `Commit (${stagedCount})`}
       </Button>
-      {error && <ErrorNotice error={error} title="No se pudo crear el commit" />}
+      {error && (
+        <ErrorNotice error={error} title={error.context ?? "No se pudo completar la operación"} />
+      )}
     </form>
   );
 }

@@ -12,7 +12,18 @@ como notas de la versión.
   Windows desde Git Bash: NSIS).
 - `scripts/build-windows.ps1` e `installer/windows/gitleviatan.iss`: instalador de Windows con Inno Setup
   para uso local (sin ejecutar todavía en Windows). Ver `docs/platforms.md`.
-- Borrador de la SPEC 10: preparar y quitar todo, y retoque visual de color basado en el logo.
+- **Preparar todo** (`git add -A`) y **Quitar todo** (`git reset`) en el panel de cambios, también en repositorios
+  sin commits y con miles de archivos (SPEC 10).
+- Retoque visual con la paleta del logo: azul primario, acento naranja de Git, fondo oscuro azul marino, color
+  por tipo de cambio (siempre junto al texto), cabeceras de sección con contador y fila seleccionada con velo
+  azul. Todo con tokens de `index.css` y validado con la prueba de contraste AA (SPEC 10).
+- Pruebas que impiden colores sueltos fuera de los tokens (`src/no-raw-colors.test.ts`).
+
+### Cambiado
+
+- Los errores del panel de cambios dicen qué operación falló («No se pudo preparar todo») en vez de siempre
+  «No se pudo crear el commit».
+- `color-scheme` claro/oscuro: las barras de desplazamiento nativas siguen el tema.
 
 ## [0.1.0] - 2026-10-19
 

@@ -68,6 +68,7 @@ describe("GraphView", () => {
     await userEvent.keyboard("{Home}");
     expect(screen.getByTestId("selected")).toHaveTextContent("oid20");
     expect(screen.getByRole("option", { selected: true })).toHaveTextContent("Commit 20");
+    expect(screen.getByRole("option", { selected: true })).toHaveClass("bg-selected");
   });
 
   it("RePág y AvPág mueven la selección por páginas", async () => {

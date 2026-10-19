@@ -23,6 +23,8 @@ pub fn run() {
             commands::get_commit,
             commands::stage_files,
             commands::unstage_files,
+            commands::stage_all,
+            commands::unstage_all,
             commands::get_diff,
             commands::create_commit,
             commands::list_branches,

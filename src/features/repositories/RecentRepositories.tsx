@@ -26,7 +26,7 @@ export function RecentRepositories() {
               title={repo.path}
               aria-current={active?.path === repo.path ? "true" : undefined}
               onClick={() => void openRepository(repo.path)}
-              className="w-full truncate rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent aria-[current=true]:bg-accent"
+              className="w-full truncate rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent aria-[current=true]:bg-selected aria-[current=true]:font-medium"
             >
               {repo.name}
             </button>

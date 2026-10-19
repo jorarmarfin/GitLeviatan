@@ -39,6 +39,22 @@ for (const [name, t] of Object.entries(themes)) {
     ["muted-foreground sobre card (diálogos)", c("muted-foreground"), c("card")],
     ["muted-foreground sobre muted", c("muted-foreground"), c("muted")],
     ["muted-foreground sobre accent (fila seleccionada)", c("muted-foreground"), c("accent")],
+    ["foreground sobre selected (fila seleccionada)", c("foreground"), c("selected")],
+    ["muted-foreground sobre selected", c("muted-foreground"), c("selected")],
+    ["primary (texto del título) sobre background", c("primary"), background],
+    ["primary (texto) sobre card", c("primary"), c("card")],
+    ["accent-git (texto) sobre background", c("accent-git"), background],
+    ["accent-git (texto) sobre card", c("accent-git"), c("card")],
+    ...(["added", "modified", "deleted", "renamed", "untracked"] as const).flatMap((kind) =>
+      (["background", "card", "accent", "selected"] as const).map(
+        (surface) =>
+          [`change-${kind} sobre ${surface}`, c(`change-${kind}`), c(surface)] as [
+            string,
+            Color,
+            Color,
+          ],
+      ),
+    ),
     ["destructive sobre background", c("destructive"), background],
     ["destructive sobre card", c("destructive"), c("card")],
     [
@@ -56,6 +72,15 @@ for (const [name, t] of Object.entries(themes)) {
   describe(`contraste AA, tema ${name}`, () => {
     it.each(text)("%s ≥ 4,5:1", (_label, fg, bg) => {
       expect(contrastRatio(fg, bg)).toBeGreaterThanOrEqual(4.5);
+    });
+
+    it("el primario contrasta ≥ 3:1 con el fondo como elemento no textual", () => {
+      expect(contrastRatio(c("primary"), background)).toBeGreaterThanOrEqual(3);
+      expect(contrastRatio(c("primary"), c("card"))).toBeGreaterThanOrEqual(3);
+    });
+
+    it("el primario contrasta ≥ 3:1 con la fila seleccionada (marca de rama actual)", () => {
+      expect(contrastRatio(c("primary"), c("selected"))).toBeGreaterThanOrEqual(3);
     });
 
     it("el anillo de foco contrasta ≥ 3:1 con el fondo y con la tarjeta", () => {
