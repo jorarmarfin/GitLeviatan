@@ -1,6 +1,6 @@
 # SPEC 01 — Bootstrap del proyecto GitLeviatán
 
-> **Estado:** Approved
+> **Estado:** Implemented
 > **Depende de:** ninguna
 > **Fecha:** 2026-10-19
 > **Objetivo:** Dejar un repositorio GPL-3.0-or-later con Tauri 2 + React + TypeScript + Vite + Tailwind/shadcn, tema claro/oscuro, CI en Ubuntu y documentación base, de modo que la app arranque en Ubuntu con una ventana vacía.
