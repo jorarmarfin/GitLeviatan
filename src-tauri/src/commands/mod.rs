@@ -21,10 +21,10 @@ use crate::git::write;
 use crate::storage::recent::RecentStore;
 use crate::storage::settings::{Settings, SettingsStore};
 
-/// Comando de prueba para validar el puente `invoke()` Rust ↔ React.
+/// Versión de la app: la de `tauri.conf.json`, la misma que llevan los instaladores.
 #[tauri::command]
-pub fn ping() -> String {
-    "pong".to_string()
+pub fn get_app_version(app: AppHandle) -> String {
+    app.package_info().version.to_string()
 }
 
 /// Ejecuta trabajo bloqueante (procesos Git) fuera del hilo de la UI.
@@ -127,6 +127,17 @@ pub async fn clear_recent_repositories(
 ) -> Result<(), AppError> {
     let store = recent_store(&app, &settings)?;
     blocking(move || store.clear().map_err(AppError::io)).await
+}
+
+/// Quita un proyecto de la lista de recientes. No toca el repositorio ni el disco.
+#[tauri::command]
+pub async fn remove_recent_repository(
+    app: AppHandle,
+    settings: State<'_, SettingsState>,
+    path: String,
+) -> Result<(), AppError> {
+    let store = recent_store(&app, &settings)?;
+    blocking(move || store.remove(&path).map_err(AppError::io)).await
 }
 
 #[tauri::command]
@@ -417,14 +428,4 @@ pub async fn clone_repository(
 #[tauri::command]
 pub fn cancel_operation(operations: State<'_, Operations>, operation_id: String) -> bool {
     operations.cancel(&operation_id)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn ping_returns_pong() {
-        assert_eq!(ping(), "pong");
-    }
 }

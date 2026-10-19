@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowDown, ArrowUp, RefreshCw, WifiOff, X } from "lucide-react";
 
 import { ErrorNotice } from "@/components/ErrorNotice";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
+import { useRepositoryStore } from "@/stores/repository";
 import type { AppError, RepositoryRef } from "@/types/git";
 
 import { SyncProgressBar } from "./SyncProgressBar";
@@ -29,6 +30,15 @@ const FAILED: Record<Kind, string> = {
 export function SyncBar({ repository, externalVersion, onChanged }: Props) {
   const target = useSyncTarget(repository, externalVersion);
   const { running, progress, canCancel, execute, cancel } = useSyncOperation();
+  const setSyncRunning = useRepositoryStore((s) => s.setSyncRunning);
+
+  // La cabecera deshabilita «Cerrar repositorio» mientras hay una operación de red. Se limpia
+  // siempre al terminar (con éxito, error o cancelación) y al desmontarse el panel.
+  useEffect(() => {
+    setSyncRunning(running);
+    return () => setSyncRunning(false);
+  }, [running, setSyncRunning]);
+
   const [failure, setFailure] = useState<{ error: AppError; title: string } | null>(null);
   const [offline, setOffline] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);

@@ -37,6 +37,14 @@ La lista tiene el foco con `Alt+2` (o con `Tab`). La selección sigue al foco y 
 | `Tab` → **Preparar todo** | Al inicio del panel: prepara todo (`git add -A`). `Enter` o `Espacio` lo activan. |
 | `Tab` → **Quitar todo**   | En la cabecera de Staged: quita todo de staged sin tocar tus archivos.            |
 
+## Proyectos: recientes y cierre
+
+| Atajo                              | Acción                                                                                  |
+| ---------------------------------- | --------------------------------------------------------------------------------------- |
+| `Tab` sobre un proyecto reciente   | Foco en su nombre y, con otro `Tab`, en su **×** (que aparece al enfocarla).            |
+| `Enter` / `Espacio` sobre la **×** | Quita el proyecto de la lista de recientes. No borra el repositorio ni nada del disco.  |
+| `Tab` hasta **Cerrar repositorio** | En la cabecera: vuelve a la pantalla inicial. Deshabilitado durante fetch, pull o push. |
+
 ## Diálogos (crear rama, eliminar rama, clonar, Preferencias)
 
 | Atajo               | Acción                                              |

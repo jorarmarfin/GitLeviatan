@@ -15,7 +15,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            commands::ping,
+            commands::get_app_version,
             commands::open_repository,
             commands::list_recent_repositories,
             commands::get_status,
@@ -32,6 +32,7 @@ pub fn run() {
             commands::checkout_branch,
             commands::delete_branch,
             commands::clear_recent_repositories,
+            commands::remove_recent_repository,
             commands::get_settings,
             commands::update_settings,
             commands::detect_git,

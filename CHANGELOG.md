@@ -4,6 +4,23 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y 
 [SemVer](https://semver.org/lang/es/). El workflow de release usa la sección `## [X.Y.Z]` del tag
 como notas de la versión.
 
+## [Sin publicar]
+
+### Añadido
+
+- **Quitar de recientes:** una **×** junto a cada proyecto de la lista, que solo borra la entrada (no toca el
+  repositorio ni el disco) y es operable con teclado (SPEC 11).
+- **Cerrar repositorio:** botón en la cabecera que vuelve a la pantalla inicial. Se deshabilita mientras hay un
+  fetch, pull o push en curso, y lo explica (SPEC 11).
+
+- **Versión de la app en el pie** (`GitLeviatán v0.2.0`), tomada de `tauri.conf.json`. Una prueba exige que
+  `package.json`, `Cargo.toml` y `tauri.conf.json` tengan la misma versión (SPEC 11).
+
+### Cambiado
+
+- Los errores de abrir un repositorio y de la lista de recientes indican qué operación falló.
+- Se elimina el `ping: pong` del pie y el comando `ping`, restos de la SPEC 01.
+
 ## [0.2.0] - 2026-10-19
 
 Preparar y quitar todo con un clic, y un retoque visual con la paleta del logo. Los instaladores de Windows y

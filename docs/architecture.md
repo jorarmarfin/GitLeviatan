@@ -22,7 +22,7 @@ Repositorio local (.git + working tree)
 
 ## Backend (`src-tauri/src/`)
 
-- `commands/`: frontera pública de Tauri (hoy solo `ping`).
+- `commands/`: frontera pública de Tauri; cada comando que usa el frontend vive aquí (repositorios, estado, ramas, sincronización, preferencias, versión).
 - `git/`: invocación y parseo de Git CLI (vacío tras el bootstrap).
 - `storage/`: preferencias y repositorios recientes (vacío tras el bootstrap).
 

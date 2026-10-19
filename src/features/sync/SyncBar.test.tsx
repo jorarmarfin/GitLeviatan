@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 
 import { api } from "@/lib/api";
 import type { BranchInfo } from "@/features/branches/types";
+import { useRepositoryStore } from "@/stores/repository";
 import type { SyncProgress } from "@/types/git";
 
 import { SyncBar } from "./SyncBar";
@@ -82,6 +83,39 @@ describe("SyncBar", () => {
     expect(api.pull).toHaveBeenCalledWith("repo-1", "origin", "main");
     expect(api.push).toHaveBeenCalledWith("repo-1", "origin", "main");
     await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(3));
+  });
+
+  it("avisa al estado global mientras hay una operación de red (y lo limpia al terminar)", async () => {
+    let finish: () => void = () => undefined;
+    vi.mocked(api.fetch).mockReturnValue(new Promise<void>((resolve) => (finish = resolve)));
+    useRepositoryStore.setState({ syncRunning: false });
+    await renderBar();
+
+    await userEvent.setup().click(screen.getByRole("button", { name: /fetch/i }));
+    await waitFor(() => expect(useRepositoryStore.getState().syncRunning).toBe(true));
+
+    finish();
+    await waitFor(() => expect(useRepositoryStore.getState().syncRunning).toBe(false));
+  });
+
+  it("limpia el aviso aunque la operación falle", async () => {
+    vi.mocked(api.push).mockRejectedValue({ kind: "network", message: "Sin conexión", detail: "" });
+    await renderBar();
+    await userEvent.setup().click(screen.getByRole("button", { name: /push/i }));
+    await screen.findByText("Sin conexión al remoto");
+    expect(useRepositoryStore.getState().syncRunning).toBe(false);
+  });
+
+  it("limpia el aviso al desmontarse el panel", async () => {
+    vi.mocked(api.fetch).mockReturnValue(new Promise<void>(() => undefined));
+    const { unmount } = render(
+      <SyncBar repository={repository} externalVersion={0} onChanged={vi.fn()} />,
+    );
+    await waitFor(() => expect(screen.getByRole("button", { name: /fetch/i })).toBeEnabled());
+    await userEvent.setup().click(screen.getByRole("button", { name: /fetch/i }));
+    await waitFor(() => expect(useRepositoryStore.getState().syncRunning).toBe(true));
+    unmount();
+    expect(useRepositoryStore.getState().syncRunning).toBe(false);
   });
 
   it("deshabilita todo sin remotos", async () => {
