@@ -17,6 +17,8 @@ vi.mock("@/lib/api", async (importOriginal) => {
       createBranch: vi.fn(),
       checkoutBranch: vi.fn(),
       deleteBranch: vi.fn(),
+      mergePreview: vi.fn(),
+      mergeBranch: vi.fn(),
     },
   };
 });
@@ -46,6 +48,17 @@ beforeEach(() => {
   vi.mocked(api.createBranch).mockReset().mockResolvedValue(undefined);
   vi.mocked(api.checkoutBranch).mockReset().mockResolvedValue(undefined);
   vi.mocked(api.deleteBranch).mockReset().mockResolvedValue({ status: "deleted" });
+  vi.mocked(api.mergePreview).mockReset().mockResolvedValue({
+    source: "feature/login",
+    target: "main",
+    commitsToMerge: 2,
+    upToDate: false,
+    fastForward: true,
+    blocked: null,
+  });
+  vi.mocked(api.mergeBranch)
+    .mockReset()
+    .mockResolvedValue({ status: "fastForward", oid: "abcdef1234567" });
 });
 
 async function renderPanel(selectedOid: string | null = null) {
@@ -248,5 +261,64 @@ describe("BranchesPanel", () => {
       />,
     );
     await vi.waitFor(() => expect(api.listBranches).toHaveBeenCalledTimes(2));
+  });
+});
+
+describe("BranchesPanel: fusionar", () => {
+  it("ofrece Fusionar en las ramas locales y remotas, menos en la actual", async () => {
+    await renderPanel();
+    const locals = within(screen.getByRole("list", { name: "Ramas locales" }));
+    const remotes = within(screen.getByRole("list", { name: "Ramas remotas" }));
+
+    expect(
+      locals.getByRole("button", { name: "Fusionar «main» en la rama actual" }),
+    ).toBeDisabled();
+    expect(
+      locals.getByRole("button", { name: "Fusionar «feature/login» en la rama actual" }),
+    ).toBeEnabled();
+    expect(
+      remotes.getByRole("button", { name: "Fusionar «origin/feature» en la rama actual" }),
+    ).toBeEnabled();
+  });
+
+  it("abre la vista previa, fusiona y avisa para refrescar", async () => {
+    const onChanged = await renderPanel();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Fusionar «feature/login» en la rama actual" }),
+    );
+
+    const dialog = await screen.findByRole("dialog", { name: /Fusionar «feature\/login»/ });
+    await within(dialog).findByText(/Entrarán/);
+    expect(dialog).toHaveTextContent("Entrarán 2 commits");
+    expect(api.mergePreview).toHaveBeenCalledWith("repo-1", "feature/login");
+    // Abrir la vista previa no cambia nada todavía.
+    expect(api.mergeBranch).not.toHaveBeenCalled();
+    expect(onChanged).not.toHaveBeenCalled();
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Fusionar" }));
+    expect(await within(dialog).findByRole("status")).toHaveTextContent("avanzó");
+    expect(api.mergeBranch).toHaveBeenCalledWith("repo-1", "feature/login");
+    expect(onChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it("también se puede fusionar una rama remota", async () => {
+    await renderPanel();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Fusionar «origin/feature» en la rama actual" }),
+    );
+    await screen.findByRole("dialog");
+    expect(api.mergePreview).toHaveBeenCalledWith("repo-1", "origin/feature");
+  });
+
+  it("Cancelar cierra el diálogo sin fusionar", async () => {
+    const onChanged = await renderPanel();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Fusionar «feature/login» en la rama actual" }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancelar" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(api.mergeBranch).not.toHaveBeenCalled();
+    expect(onChanged).not.toHaveBeenCalled();
   });
 });

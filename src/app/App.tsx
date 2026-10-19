@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import logo from "@/assets/logo.png";
 import { AppFooter } from "@/components/AppFooter";
@@ -23,6 +23,10 @@ export function App() {
   const theme = useSettingsStore((s) => s.settings.theme);
   const git = useSettingsStore((s) => s.git);
   const settingsError = useSettingsStore((s) => s.loadError);
+  const settingsLoaded = useSettingsStore((s) => s.loaded);
+  const reopenLastRepository = useSettingsStore((s) => s.settings.reopenLastRepository);
+  const lastRepositoryPath = useSettingsStore((s) => s.settings.lastRepositoryPath);
+  const reopenLast = useRepositoryStore((s) => s.reopenLast);
   const loadSettings = useSettingsStore((s) => s.load);
   const detectGit = useSettingsStore((s) => s.detectGit);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
@@ -35,6 +39,17 @@ export function App() {
   useEffect(() => {
     void loadSettings();
   }, [loadSettings]);
+
+  // Al iniciar se reabre el último proyecto (una sola vez, cuando se sabe que Git está disponible:
+  // sin Git no se puede abrir nada y no hay que olvidar la ruta por ello).
+  const reopenTried = useRef(false);
+  useEffect(() => {
+    if (reopenTried.current || !settingsLoaded || git === null) return;
+    reopenTried.current = true;
+    if (git.available && reopenLastRepository && lastRepositoryPath) {
+      void reopenLast(lastRepositoryPath);
+    }
+  }, [settingsLoaded, git, reopenLastRepository, lastRepositoryPath, reopenLast]);
 
   return (
     <div className="flex h-screen flex-col">

@@ -8,6 +8,14 @@ como notas de la versión.
 
 ### Añadido
 
+- **Selector de rama** en la barra superior: muestra la rama actual y abre un modal con buscador sobre las ramas
+  locales y remotas, operable con teclado; confirma el cambio («Cambiaste a «x»») (SPEC 12).
+- **Fusionar** una rama (local o remota) en la rama actual, con vista previa de los commits que entran y de si
+  bastará con avanzar la rama o se creará un commit de fusión. Con conflictos la fusión se cancela sola, el
+  repositorio queda como estaba y se listan los archivos en conflicto. No se fusiona con HEAD desacoplado ni con
+  cambios sin confirmar (SPEC 12).
+- **Abrir el último proyecto al iniciar** (preferencia activada por defecto). «Cerrar repositorio» lo olvida y una
+  ruta que ya no existe se ignora sin error (SPEC 12).
 - **Quitar de recientes:** una **×** junto a cada proyecto de la lista, que solo borra la entrada (no toca el
   repositorio ni el disco) y es operable con teclado. Pide confirmación en un modal de la app (con el foco en
   **Cancelar**), no en un diálogo nativo del navegador (SPEC 11).
@@ -20,7 +28,11 @@ como notas de la versión.
 
 ### Cambiado
 
+- Cambiar de rama con cambios locales que lo impiden ahora lista los archivos afectados y aclara que no se cambió
+  de rama.
 - Los errores de abrir un repositorio y de la lista de recientes indican qué operación falló.
+- Los diálogos devuelven el foco al botón que los abrió aunque su contenido use `autoFocus`, y ya no lo mueven cuando
+  el padre se vuelve a renderizar.
 - Se elimina el `ping: pong` del pie y el comando `ping`, restos de la SPEC 01.
 
 ## [0.2.0] - 2026-10-19

@@ -3,9 +3,13 @@
 use std::path::Path;
 
 use super::error::AppError;
+use super::operations::get_status;
 use super::operations::is_valid_oid;
 use super::process::run_git;
-use super::types::{BranchInfo, BranchKind, DeleteBranchOutcome, DeleteReason};
+use super::types::{
+    BranchInfo, BranchKind, DeleteBranchOutcome, DeleteReason, MergeBlock, MergePreview,
+    MergeResult,
+};
 
 /// `%(HEAD)` vale `*` solo en la rama actual; en detached HEAD ninguna rama lo tiene.
 const BRANCH_FORMAT: &str =
@@ -144,21 +148,41 @@ pub fn checkout_branch(repo: &Path, branch: &str) -> Result<(), AppError> {
     };
 
     result.map(|_| ()).map_err(|error| {
-        let blocked = error
-            .detail
-            .as_deref()
-            .is_some_and(|d| d.contains("would be overwritten") || d.contains("local changes"));
-        if blocked {
-            AppError {
-                message: "Tienes cambios locales que se perderían al cambiar de rama. \
-                          Confírmalos o descártalos antes de continuar."
-                    .into(),
-                ..error
-            }
+        let detail = error.detail.clone().unwrap_or_default();
+        if !(detail.contains("would be overwritten") || detail.contains("local changes")) {
+            return error;
+        }
+        let files = overwritten_files(&detail);
+        let list = if files.is_empty() {
+            String::new()
         } else {
-            error
+            format!(": {}", files.join(", "))
+        };
+        AppError {
+            message: format!(
+                "Tienes cambios locales que se perderían al cambiar de rama{list}. \
+                 Confírmalos o descártalos antes de continuar; no se cambió de rama."
+            ),
+            ..error
         }
     })
+}
+
+/// Archivos que Git dice que se sobrescribirían (líneas con sangría tras el aviso), tanto de
+/// cambios locales como de archivos sin seguimiento que estorban.
+fn overwritten_files(stderr: &str) -> Vec<String> {
+    let mut files = Vec::new();
+    let mut listing = false;
+    for line in stderr.lines() {
+        if line.contains("would be overwritten") {
+            listing = true;
+        } else if listing && line.starts_with(['\t', ' ']) && !line.trim().is_empty() {
+            files.push(line.trim().to_string());
+        } else {
+            listing = false;
+        }
+    }
+    files
 }
 
 /// Elimina una rama local. Sin `force` usa `-d`: si no está fusionada devuelve `NeedsForce`.
@@ -194,6 +218,139 @@ pub fn delete_branch(
             })
         }
         Err(error) => Err(error),
+    }
+}
+
+/// Referencia completa de una rama local o remota, o error si no existe.
+fn resolve_branch_ref(repo: &Path, name: &str) -> Result<String, AppError> {
+    require_plain_name(name)?;
+    if name.contains("@{") {
+        return Err(invalid_name(name));
+    }
+    for prefix in ["refs/heads/", "refs/remotes/"] {
+        let full = format!("{prefix}{name}");
+        if ref_exists(repo, &full) {
+            return Ok(full);
+        }
+    }
+    Err(AppError::invalid_input(format!(
+        "La rama «{name}» no existe."
+    )))
+}
+
+fn head_oid(repo: &Path) -> Result<String, AppError> {
+    let out = run_git(repo, ["rev-parse", "HEAD"])?;
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+/// Archivos seguidos con cambios sin commitear (en staged o en el working tree). Los archivos
+/// sin seguimiento no cuentan: una fusión no los toca salvo que Git los vaya a crear.
+fn tracked_local_changes(repo: &Path) -> Result<Vec<String>, AppError> {
+    let status = get_status(repo)?;
+    let mut files: Vec<String> = status
+        .staged
+        .iter()
+        .chain(status.unstaged.iter())
+        .map(|f| f.path.clone())
+        .collect();
+    files.sort();
+    files.dedup();
+    Ok(files)
+}
+
+/// Qué pasaría al fusionar `source` (rama local o remota) en la rama actual. No modifica nada.
+pub fn merge_preview(repo: &Path, source: &str) -> Result<MergePreview, AppError> {
+    let source_ref = resolve_branch_ref(repo, source)?;
+    let target = current_branch(repo);
+    if target.as_deref() == Some(source) {
+        return Err(AppError::invalid_input(
+            "No se puede fusionar una rama consigo misma.",
+        ));
+    }
+
+    let count = run_git(
+        repo,
+        ["rev-list", "--count", &format!("HEAD..{source_ref}")],
+    )?;
+    let commits_to_merge: u32 = String::from_utf8_lossy(&count.stdout)
+        .trim()
+        .parse()
+        .map_err(|_| AppError::internal("Salida de Git inesperada (rev-list)."))?;
+    let fast_forward = commits_to_merge > 0
+        && run_git(repo, ["merge-base", "--is-ancestor", "HEAD", &source_ref]).is_ok();
+
+    let blocked = if target.is_none() {
+        Some(MergeBlock::DetachedHead)
+    } else {
+        let files = tracked_local_changes(repo)?;
+        (!files.is_empty()).then_some(MergeBlock::LocalChanges { files })
+    };
+
+    Ok(MergePreview {
+        source: source.to_string(),
+        target: target.unwrap_or_else(|| "HEAD".to_string()),
+        commits_to_merge,
+        up_to_date: commits_to_merge == 0,
+        fast_forward,
+        blocked,
+    })
+}
+
+/// Fusiona `source` en la rama actual. Avanza la rama si es posible; si no, crea un commit de
+/// fusión con el mensaje por defecto de Git. Con conflictos cancela la fusión (`merge --abort`)
+/// y deja el repositorio exactamente como estaba.
+pub fn merge_branch(repo: &Path, source: &str) -> Result<MergeResult, AppError> {
+    let preview = merge_preview(repo, source)?;
+    match &preview.blocked {
+        Some(MergeBlock::DetachedHead) => {
+            return Err(AppError::invalid_input(
+                "No se puede fusionar con el HEAD desacoplado. Cámbiate a una rama antes.",
+            ));
+        }
+        Some(MergeBlock::LocalChanges { files }) => {
+            return Err(AppError::invalid_input(format!(
+                "Hay cambios sin confirmar en: {}. Confírmalos o descártalos antes de fusionar.",
+                files.join(", ")
+            )));
+        }
+        None => {}
+    }
+    if preview.up_to_date {
+        return Ok(MergeResult::UpToDate);
+    }
+
+    match run_git(repo, ["merge", "--no-edit", source]) {
+        Ok(_) => {
+            let oid = head_oid(repo)?;
+            Ok(if preview.fast_forward {
+                MergeResult::FastForward { oid }
+            } else {
+                MergeResult::Merged { oid }
+            })
+        }
+        Err(error) => {
+            // Una fusión en curso (MERGE_HEAD) significa conflictos; cualquier otro fallo
+            // (historias sin relación, un hook…) se devuelve tal cual.
+            let in_progress =
+                run_git(repo, ["rev-parse", "--quiet", "--verify", "MERGE_HEAD"]).is_ok();
+            if !in_progress {
+                return Err(error);
+            }
+            let unmerged = run_git(repo, ["diff", "--name-only", "--diff-filter=U", "-z"])?;
+            let mut files: Vec<String> = String::from_utf8_lossy(&unmerged.stdout)
+                .split('\0')
+                .filter(|f| !f.is_empty())
+                .map(str::to_string)
+                .collect();
+            files.sort();
+            run_git(repo, ["merge", "--abort"]).map_err(|abort| AppError {
+                message: "La fusión tuvo conflictos y no se pudo cancelar. Revisa el estado \
+                          del repositorio."
+                    .into(),
+                ..abort
+            })?;
+            Ok(MergeResult::Conflict { files })
+        }
     }
 }
 
@@ -394,6 +551,32 @@ mod tests {
     }
 
     #[test]
+    fn overwritten_files_are_read_from_git_output() {
+        let tracked = "error: Your local changes to the following files would be overwritten by checkout:\n\ta.txt\n\tcarpeta/b.txt\nPlease commit your changes or stash them before you switch branches.\nAborting\n";
+        assert_eq!(overwritten_files(tracked), vec!["a.txt", "carpeta/b.txt"]);
+        let untracked = "error: The following untracked working tree files would be overwritten by checkout:\n\tnuevo.txt\nPlease move or remove them before you switch branches.\nAborting";
+        assert_eq!(overwritten_files(untracked), vec!["nuevo.txt"]);
+        assert!(overwritten_files("fatal: otra cosa").is_empty());
+    }
+
+    #[test]
+    fn checkout_blocked_by_an_untracked_file_names_it() {
+        let repo = init_repo();
+        commit_file(repo.path(), "a.txt", "base\n", "base");
+        git(repo.path(), &["checkout", "-q", "-b", "otra"]);
+        commit_file(repo.path(), "nuevo.txt", "de otra\n", "añade nuevo");
+        git(repo.path(), &["checkout", "-q", "main"]);
+        std::fs::write(repo.path().join("nuevo.txt"), "mío\n").unwrap();
+
+        let err = checkout_branch(repo.path(), "otra").unwrap_err();
+        assert!(err.message.contains("nuevo.txt"), "{}", err.message);
+        assert_eq!(
+            std::fs::read_to_string(repo.path().join("nuevo.txt")).unwrap(),
+            "mío\n"
+        );
+    }
+
+    #[test]
     fn checkout_with_conflicting_local_changes_fails_and_stays_put() {
         let repo = init_repo();
         commit_file(repo.path(), "a.txt", "base\n", "base");
@@ -405,6 +588,9 @@ mod tests {
         let err = checkout_branch(repo.path(), "otra").unwrap_err();
         assert_eq!(err.kind, AppErrorKind::Git);
         assert!(err.message.contains("cambios locales"));
+        // Dice qué archivos están en juego y que no se cambió de rama.
+        assert!(err.message.contains("a.txt"), "{}", err.message);
+        assert!(err.message.contains("no se cambió de rama"));
         assert!(err.detail.unwrap().contains("would be overwritten"));
         let current = list_branches(repo.path())
             .unwrap()
@@ -519,5 +705,305 @@ mod tests {
             .unwrap(),
             r#"{"status":"needsForce","reason":"notMerged"}"#
         );
+    }
+
+    // --- fusionar (SPEC 12) ---
+
+    /// `main` con un commit base. Devuelve el repositorio.
+    fn base_repo() -> tempfile::TempDir {
+        let repo = init_repo();
+        commit_file(repo.path(), "a.txt", "uno\ndos\ntres\n", "base");
+        repo
+    }
+
+    fn head(repo: &Path) -> String {
+        head_oid(repo).unwrap()
+    }
+
+    fn tree(repo: &Path) -> String {
+        let out = run_git(repo, ["rev-parse", "HEAD^{tree}"]).unwrap();
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    fn parents(repo: &Path) -> usize {
+        let out = run_git(repo, ["rev-list", "--parents", "-n", "1", "HEAD"]).unwrap();
+        String::from_utf8_lossy(&out.stdout)
+            .split_whitespace()
+            .count()
+            - 1
+    }
+
+    /// `feature` sale de `main` y avanza `n` commits; vuelve a `main`.
+    fn add_feature(repo: &Path, n: usize) {
+        git(repo, &["checkout", "-q", "-b", "feature"]);
+        for i in 0..n {
+            commit_file(repo, &format!("f{i}.txt"), "x\n", &format!("feature {i}"));
+        }
+        git(repo, &["checkout", "-q", "main"]);
+    }
+
+    #[test]
+    fn preview_counts_commits_and_detects_fast_forward() {
+        let repo = base_repo();
+        add_feature(repo.path(), 3);
+        let p = merge_preview(repo.path(), "feature").unwrap();
+        assert_eq!(p.source, "feature");
+        assert_eq!(p.target, "main");
+        assert_eq!(p.commits_to_merge, 3);
+        assert!(p.fast_forward && !p.up_to_date);
+        assert_eq!(p.blocked, None);
+    }
+
+    #[test]
+    fn preview_of_a_diverged_branch_needs_a_merge_commit() {
+        let repo = base_repo();
+        add_feature(repo.path(), 2);
+        commit_file(repo.path(), "solo-main.txt", "m\n", "en main");
+        let p = merge_preview(repo.path(), "feature").unwrap();
+        assert_eq!(p.commits_to_merge, 2);
+        assert!(!p.fast_forward);
+    }
+
+    #[test]
+    fn preview_does_not_modify_anything() {
+        let repo = base_repo();
+        add_feature(repo.path(), 1);
+        let before = head(repo.path());
+        merge_preview(repo.path(), "feature").unwrap();
+        assert_eq!(head(repo.path()), before);
+        assert!(get_status(repo.path()).unwrap().staged.is_empty());
+    }
+
+    #[test]
+    fn fast_forward_merge_matches_the_cli() {
+        let ours = base_repo();
+        let cli = base_repo();
+        for repo in [ours.path(), cli.path()] {
+            add_feature(repo, 2);
+        }
+        let result = merge_branch(ours.path(), "feature").unwrap();
+        git(cli.path(), &["merge", "--no-edit", "feature"]);
+
+        let MergeResult::FastForward { oid } = result else {
+            panic!("se esperaba avance rápido");
+        };
+        assert_eq!(oid, head(ours.path()));
+        assert_eq!(parents(ours.path()), 1);
+        assert_eq!(tree(ours.path()), tree(cli.path()));
+        assert!(ours.path().join("f1.txt").exists());
+    }
+
+    #[test]
+    fn diverged_merge_creates_a_merge_commit_like_the_cli() {
+        let ours = base_repo();
+        let cli = base_repo();
+        for repo in [ours.path(), cli.path()] {
+            add_feature(repo, 1);
+            commit_file(repo, "solo-main.txt", "m\n", "en main");
+        }
+        let result = merge_branch(ours.path(), "feature").unwrap();
+        git(cli.path(), &["merge", "--no-edit", "feature"]);
+
+        let MergeResult::Merged { oid } = result else {
+            panic!("se esperaba un commit de fusión");
+        };
+        assert_eq!(oid, head(ours.path()));
+        assert_eq!(parents(ours.path()), 2);
+        assert_eq!(tree(ours.path()), tree(cli.path()));
+        let subject = run_git(ours.path(), ["log", "-1", "--format=%s"]).unwrap();
+        assert!(String::from_utf8_lossy(&subject.stdout).starts_with("Merge branch 'feature'"));
+    }
+
+    #[test]
+    fn merging_an_included_branch_does_nothing() {
+        let repo = base_repo();
+        add_feature(repo.path(), 1);
+        merge_branch(repo.path(), "feature").unwrap();
+        let before = head(repo.path());
+        assert_eq!(
+            merge_branch(repo.path(), "feature").unwrap(),
+            MergeResult::UpToDate
+        );
+        assert_eq!(head(repo.path()), before);
+        assert!(merge_preview(repo.path(), "feature").unwrap().up_to_date);
+    }
+
+    /// `main` y `feature` cambian la misma línea de `a.txt`.
+    fn conflicting_repo() -> tempfile::TempDir {
+        let repo = base_repo();
+        git(repo.path(), &["checkout", "-q", "-b", "feature"]);
+        commit_file(repo.path(), "a.txt", "uno\nDE FEATURE\ntres\n", "feature");
+        git(repo.path(), &["checkout", "-q", "main"]);
+        commit_file(repo.path(), "a.txt", "uno\nDE MAIN\ntres\n", "main");
+        repo
+    }
+
+    #[test]
+    fn conflicts_abort_the_merge_and_leave_the_repository_untouched() {
+        let repo = conflicting_repo();
+        let head_before = head(repo.path());
+        let content_before = std::fs::read_to_string(repo.path().join("a.txt")).unwrap();
+
+        let result = merge_branch(repo.path(), "feature").unwrap();
+
+        assert_eq!(
+            result,
+            MergeResult::Conflict {
+                files: vec!["a.txt".to_string()]
+            }
+        );
+        assert_eq!(head(repo.path()), head_before);
+        assert_eq!(
+            std::fs::read_to_string(repo.path().join("a.txt")).unwrap(),
+            content_before
+        );
+        assert!(!content_before.contains("<<<<<<<"));
+        // No queda ninguna fusión a medias ni cambios en el índice o el working tree.
+        assert!(run_git(
+            repo.path(),
+            ["rev-parse", "--quiet", "--verify", "MERGE_HEAD"]
+        )
+        .is_err());
+        let s = get_status(repo.path()).unwrap();
+        assert!(s.staged.is_empty() && s.unstaged.is_empty() && s.untracked.is_empty());
+    }
+
+    #[test]
+    fn conflicts_list_every_conflicting_file() {
+        let repo = base_repo();
+        commit_file(repo.path(), "b.txt", "b\n", "otro archivo");
+        git(repo.path(), &["checkout", "-q", "-b", "feature"]);
+        commit_file(repo.path(), "a.txt", "FEATURE\n", "f1");
+        commit_file(repo.path(), "b.txt", "FEATURE\n", "f2");
+        git(repo.path(), &["checkout", "-q", "main"]);
+        commit_file(repo.path(), "a.txt", "MAIN\n", "m1");
+        commit_file(repo.path(), "b.txt", "MAIN\n", "m2");
+
+        let MergeResult::Conflict { files } = merge_branch(repo.path(), "feature").unwrap() else {
+            panic!("se esperaban conflictos");
+        };
+        assert_eq!(files, vec!["a.txt", "b.txt"]);
+    }
+
+    #[test]
+    fn detached_head_blocks_the_merge() {
+        let repo = base_repo();
+        add_feature(repo.path(), 1);
+        git(repo.path(), &["checkout", "-q", "--detach"]);
+
+        let p = merge_preview(repo.path(), "feature").unwrap();
+        assert_eq!(p.blocked, Some(MergeBlock::DetachedHead));
+        let err = merge_branch(repo.path(), "feature").unwrap_err();
+        assert_eq!(err.kind, AppErrorKind::Validation);
+        assert!(err.message.contains("desacoplado"));
+    }
+
+    #[test]
+    fn local_changes_block_the_merge_and_are_listed() {
+        let repo = base_repo();
+        add_feature(repo.path(), 1);
+        std::fs::write(repo.path().join("a.txt"), "cambiado\n").unwrap();
+
+        let p = merge_preview(repo.path(), "feature").unwrap();
+        assert_eq!(
+            p.blocked,
+            Some(MergeBlock::LocalChanges {
+                files: vec!["a.txt".to_string()]
+            })
+        );
+        let before = head(repo.path());
+        let err = merge_branch(repo.path(), "feature").unwrap_err();
+        assert_eq!(err.kind, AppErrorKind::Validation);
+        assert!(err.message.contains("a.txt"));
+        assert_eq!(head(repo.path()), before);
+        // El cambio local sigue ahí.
+        assert_eq!(
+            std::fs::read_to_string(repo.path().join("a.txt")).unwrap(),
+            "cambiado\n"
+        );
+    }
+
+    #[test]
+    fn staged_changes_also_block_but_untracked_files_do_not() {
+        let repo = base_repo();
+        add_feature(repo.path(), 1);
+        std::fs::write(repo.path().join("suelto.txt"), "x").unwrap();
+        assert_eq!(merge_preview(repo.path(), "feature").unwrap().blocked, None);
+
+        std::fs::write(repo.path().join("a.txt"), "preparado\n").unwrap();
+        git(repo.path(), &["add", "a.txt"]);
+        assert!(matches!(
+            merge_preview(repo.path(), "feature").unwrap().blocked,
+            Some(MergeBlock::LocalChanges { .. })
+        ));
+    }
+
+    #[test]
+    fn remote_branches_can_be_merged() {
+        let (local, remote) = repo_with_remote();
+        // Otro clon publica un commit en `origin/main`.
+        let other = tempfile::tempdir().unwrap();
+        git(
+            other.path(),
+            &[
+                "clone",
+                "-q",
+                &crate::git::testutil::file_url(remote.path()),
+                ".",
+            ],
+        );
+        git(other.path(), &["config", "user.name", "Otro"]);
+        git(other.path(), &["config", "user.email", "otro@example.com"]);
+        git(other.path(), &["config", "commit.gpgsign", "false"]);
+        commit_file(other.path(), "remoto.txt", "r\n", "desde el remoto");
+        git(other.path(), &["push", "-q", "origin", "main"]);
+        git(local.path(), &["fetch", "-q", "origin"]);
+
+        let p = merge_preview(local.path(), "origin/main").unwrap();
+        assert_eq!(p.commits_to_merge, 1);
+        assert!(p.fast_forward);
+        assert!(matches!(
+            merge_branch(local.path(), "origin/main").unwrap(),
+            MergeResult::FastForward { .. }
+        ));
+        assert!(local.path().join("remoto.txt").exists());
+    }
+
+    #[test]
+    fn invalid_names_and_self_merges_are_rejected() {
+        let repo = base_repo();
+        for bad in [
+            "",
+            "-x",
+            "--help",
+            "--output=/tmp/x",
+            "no-existe",
+            "main@{1}",
+        ] {
+            let err = merge_preview(repo.path(), bad).unwrap_err();
+            assert_eq!(err.kind, AppErrorKind::Validation, "{bad:?}");
+            assert!(merge_branch(repo.path(), bad).is_err(), "{bad:?}");
+        }
+        let err = merge_branch(repo.path(), "main").unwrap_err();
+        assert!(err.message.contains("consigo misma"));
+    }
+
+    #[test]
+    fn unrelated_histories_fail_without_leaving_a_merge_in_progress() {
+        let repo = base_repo();
+        git(repo.path(), &["checkout", "-q", "--orphan", "huerfana"]);
+        git(repo.path(), &["rm", "-rf", "-q", "."]);
+        commit_file(repo.path(), "otra.txt", "x\n", "sin relación");
+        git(repo.path(), &["checkout", "-q", "main"]);
+
+        let before = head(repo.path());
+        let err = merge_branch(repo.path(), "huerfana").unwrap_err();
+        assert_eq!(err.kind, AppErrorKind::Git);
+        assert_eq!(head(repo.path()), before);
+        assert!(run_git(
+            repo.path(),
+            ["rev-parse", "--quiet", "--verify", "MERGE_HEAD"]
+        )
+        .is_err());
     }
 }

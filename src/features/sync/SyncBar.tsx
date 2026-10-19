@@ -7,6 +7,8 @@ import { api } from "@/lib/api";
 import { useRepositoryStore } from "@/stores/repository";
 import type { AppError, RepositoryRef } from "@/types/git";
 
+import { BranchSwitcher } from "@/features/branches/BranchSwitcher";
+
 import { SyncProgressBar } from "./SyncProgressBar";
 import { useSyncOperation } from "./useSyncOperation";
 import { useSyncTarget } from "./useSyncTarget";
@@ -76,6 +78,11 @@ export function SyncBar({ repository, externalVersion, onChanged }: Props) {
       aria-label="Sincronización"
       className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2"
     >
+      <BranchSwitcher
+        repository={repository}
+        externalVersion={externalVersion}
+        onChanged={onChanged}
+      />
       <Button
         size="sm"
         variant="outline"

@@ -49,6 +49,24 @@ describe("PreferencesDialog", () => {
     expect(screen.getByText(/Git 2\.43\.0 detectado/)).toBeInTheDocument();
   });
 
+  it("ofrece abrir el último proyecto al iniciar, activado por defecto, y se puede desactivar", async () => {
+    const user = userEvent.setup();
+    render(<PreferencesDialog onClose={vi.fn()} />);
+    const checkbox = screen.getByRole("checkbox", { name: /Abrir el último proyecto al iniciar/ });
+    expect(checkbox).toBeChecked();
+    expect(screen.getByText(/«Cerrar repositorio» lo olvida/)).toBeInTheDocument();
+
+    await user.click(checkbox);
+    expect(checkbox).not.toBeChecked();
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+    await waitFor(() =>
+      expect(api.updateSettings).toHaveBeenCalledWith({
+        ...DEFAULT_SETTINGS,
+        reopenLastRepository: false,
+      }),
+    );
+  });
+
   it("guarda ruta de Git y límite de recientes", async () => {
     const user = userEvent.setup();
     render(<PreferencesDialog onClose={vi.fn()} />);

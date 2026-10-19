@@ -34,6 +34,17 @@ pub struct Settings {
     /// `None` = buscar `git` en el `PATH`.
     pub git_path: Option<String>,
     pub max_recent_repositories: u32,
+    /// Abrir al iniciar el último proyecto que estaba abierto. Opcional en el archivo (SPEC 12):
+    /// un `settings.json` de la SPEC 07 sin este campo sigue siendo válido.
+    #[serde(default = "default_reopen")]
+    pub reopen_last_repository: bool,
+    /// Ruta del último proyecto abierto; `None` si se cerró con «Cerrar repositorio».
+    #[serde(default)]
+    pub last_repository_path: Option<String>,
+}
+
+fn default_reopen() -> bool {
+    true
 }
 
 impl Default for Settings {
@@ -43,6 +54,8 @@ impl Default for Settings {
             theme: Theme::System,
             git_path: None,
             max_recent_repositories: DEFAULT_RECENT,
+            reopen_last_repository: true,
+            last_repository_path: None,
         }
     }
 }
@@ -149,7 +162,10 @@ mod tests {
         let json = serde_json::to_value(Settings::default()).unwrap();
         assert_eq!(
             json,
-            serde_json::json!({"version":1,"theme":"system","gitPath":null,"maxRecentRepositories":20})
+            serde_json::json!({
+                "version":1,"theme":"system","gitPath":null,"maxRecentRepositories":20,
+                "reopenLastRepository":true,"lastRepositoryPath":null
+            })
         );
     }
 
@@ -270,5 +286,57 @@ mod tests {
         .validated()
         .unwrap();
         assert_eq!(blank.git_path, None);
+    }
+
+    // --- campos de la SPEC 12 ---
+
+    #[test]
+    fn a_spec_07_file_without_the_new_fields_loads_without_backup() {
+        let (_dir, store) = store();
+        fs::create_dir_all(store.path.parent().unwrap()).unwrap();
+        fs::write(
+            &store.path,
+            r#"{"version":1,"theme":"dark","gitPath":null,"maxRecentRepositories":12}"#,
+        )
+        .unwrap();
+
+        let loaded = store.load();
+        assert_eq!(loaded.theme, Theme::Dark);
+        assert_eq!(loaded.max_recent_repositories, 12);
+        assert!(
+            loaded.reopen_last_repository,
+            "por defecto se reabre el último proyecto"
+        );
+        assert_eq!(loaded.last_repository_path, None);
+        // No se respaldó ni se recreó: el archivo original sigue intacto.
+        assert!(!store.path.with_extension("json.bak").exists());
+        assert!(fs::read_to_string(&store.path)
+            .unwrap()
+            .contains("\"theme\":\"dark\""));
+    }
+
+    #[test]
+    fn the_new_fields_roundtrip() {
+        let (_dir, store) = store();
+        let settings = Settings {
+            reopen_last_repository: false,
+            last_repository_path: Some("/home/ana/proyecto".into()),
+            ..Settings::default()
+        };
+        store.save(&settings).unwrap();
+        assert_eq!(store.load(), settings);
+    }
+
+    #[test]
+    fn the_new_fields_do_not_affect_validation() {
+        let ok = Settings {
+            reopen_last_repository: false,
+            last_repository_path: Some("/no/existe".into()),
+            ..Settings::default()
+        }
+        .validated()
+        .unwrap();
+        assert!(!ok.reopen_last_repository);
+        assert_eq!(ok.last_repository_path.as_deref(), Some("/no/existe"));
     }
 }
