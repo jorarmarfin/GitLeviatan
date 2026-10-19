@@ -33,6 +33,21 @@ pub fn commit_file(dir: &Path, name: &str, content: &str, message: &str) {
     git(dir, &["commit", "-q", "-m", message]);
 }
 
+/// De una lista de nombres de archivo, los que el SO actual permite crear. Windows no admite
+/// `< > : " | ? *`, `\\`, ni caracteres de control (como un salto de línea).
+pub fn portable_names<'a>(names: &[&'a str]) -> Vec<&'a str> {
+    names
+        .iter()
+        .copied()
+        .filter(|name| {
+            !cfg!(windows)
+                || !name
+                    .chars()
+                    .any(|c| c.is_control() || "<>:\"|?*\\".contains(c))
+        })
+        .collect()
+}
+
 /// URL `file://` válida en cualquier SO: en Windows `C:\\tmp\\r` pasa a `file:///C:/tmp/r`.
 pub fn file_url(path: &Path) -> String {
     let text = path.to_string_lossy().replace('\\', "/");
@@ -125,6 +140,17 @@ pub fn perf_repo(total: usize) -> TempDir {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn portable_names_keeps_everything_outside_windows() {
+        let names = ["a b.txt", "ñandú.txt", "salto\nlinea.txt", "*.txt"];
+        let kept = portable_names(&names);
+        if cfg!(windows) {
+            assert_eq!(kept, vec!["a b.txt", "ñandú.txt"]);
+        } else {
+            assert_eq!(kept, names.to_vec());
+        }
+    }
 
     #[test]
     fn file_url_is_valid_for_unix_and_windows_paths() {

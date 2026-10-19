@@ -177,7 +177,7 @@ pub fn get_diff(repo: &Path, path: &str, scope: DiffScope) -> Result<FileDiff, A
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::git::testutil::{commit_file, git, init_repo};
+    use crate::git::testutil::{commit_file, git, init_repo, portable_names};
     use crate::git::write::stage_files;
 
     fn autocrlf_repo() -> tempfile::TempDir {
@@ -334,7 +334,8 @@ mod tests {
     #[test]
     fn handles_special_file_names() {
         let repo = init_repo();
-        for name in ["con espacios.txt", "ñandú_日本.txt", "salto\nlinea.txt"] {
+        for name in portable_names(&["con espacios.txt", "ñandú_日本.txt", "salto\nlinea.txt"])
+        {
             std::fs::write(repo.path().join(name), format!("contenido de {name}")).unwrap();
             let d = get_diff(repo.path(), name, DiffScope::Unstaged).unwrap();
             assert_eq!(d.modified, format!("contenido de {name}"));
@@ -345,6 +346,7 @@ mod tests {
     fn rejects_paths_outside_the_repository() {
         let repo = init_repo();
         for bad in ["../secreto", "/etc/passwd", ""] {
+            // En Windows `/etc/passwd` no tiene unidad pero sigue siendo una ruta con raíz.
             assert_eq!(
                 get_diff(repo.path(), bad, DiffScope::Unstaged)
                     .unwrap_err()

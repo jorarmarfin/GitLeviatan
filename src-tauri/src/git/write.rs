@@ -12,10 +12,18 @@ pub fn validate_relative_path(path: &str) -> Result<(), AppError> {
         return Err(AppError::invalid_input("Ruta de archivo inválida."));
     }
     let candidate = Path::new(path);
-    let escapes = candidate.is_absolute()
-        || candidate
-            .components()
-            .any(|c| matches!(c, Component::ParentDir | Component::Prefix(_)));
+    // En Windows `/etc/passwd` no es «absoluta» (le falta la unidad) pero `join` la trata como
+    // raíz y saldría del repositorio: por eso también se rechazan `RootDir` y los separadores
+    // iniciales, y no solo `is_absolute()`.
+    let rooted = path.starts_with('/') || (cfg!(windows) && path.starts_with('\\'));
+    let escapes = rooted
+        || candidate.is_absolute()
+        || candidate.components().any(|c| {
+            matches!(
+                c,
+                Component::ParentDir | Component::Prefix(_) | Component::RootDir
+            )
+        });
     if escapes {
         return Err(AppError::invalid_input(format!(
             "La ruta debe ser relativa al repositorio: {path}"
@@ -98,7 +106,7 @@ mod tests {
     use super::*;
     use crate::git::error::AppErrorKind;
     use crate::git::operations::{get_status, list_commits};
-    use crate::git::testutil::{commit_file, git, init_repo};
+    use crate::git::testutil::{commit_file, git, init_repo, portable_names};
 
     fn paths(items: &[&str]) -> Vec<String> {
         items.iter().map(|s| s.to_string()).collect()
@@ -150,10 +158,11 @@ mod tests {
             "salto\nlinea.txt",
             "*.txt",
         ];
+        let names = &portable_names(&names)[..];
         for name in names {
             std::fs::write(repo.path().join(name), "x").unwrap();
         }
-        let mut all = paths(&names);
+        let mut all = paths(names);
         all.push("borrar.txt".into());
         stage_files(repo.path(), &all).unwrap();
 
@@ -197,7 +206,18 @@ mod tests {
     #[test]
     fn rejects_invalid_paths() {
         let repo = init_repo();
-        for bad in ["", "/etc/passwd", "../fuera.txt", "a/../../b"] {
+        for bad in [
+            "",
+            "/etc/passwd",
+            "\\etc\\passwd",
+            "../fuera.txt",
+            "a/../../b",
+            "C:/Windows/win.ini",
+        ] {
+            // En Linux `\\etc\\passwd` y `C:/…` son nombres de archivo legales y relativos.
+            if !cfg!(windows) && (bad.starts_with('\\') || bad.starts_with("C:")) {
+                continue;
+            }
             assert_eq!(
                 stage_files(repo.path(), &paths(&[bad])).unwrap_err().kind,
                 AppErrorKind::Validation,

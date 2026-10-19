@@ -84,7 +84,7 @@ pub fn get_commit(repo: &Path, oid: &str) -> Result<CommitDetail, AppError> {
 mod tests {
     use super::super::types::ChangeKind;
     use super::*;
-    use crate::git::testutil::{commit_file, git, init_repo};
+    use crate::git::testutil::{commit_file, git, init_repo, portable_names};
 
     #[test]
     fn status_of_empty_repository() {
@@ -136,12 +136,13 @@ mod tests {
     #[test]
     fn status_handles_special_file_names() {
         let repo = init_repo();
-        for name in ["con espacios.txt", "ñandú_日本.txt", "salto\nlinea.txt"] {
+        let names = portable_names(&["con espacios.txt", "ñandú_日本.txt", "salto\nlinea.txt"]);
+        for name in &names {
             std::fs::write(repo.path().join(name), "x").unwrap();
         }
         let mut untracked = get_status(repo.path()).unwrap().untracked;
         untracked.sort();
-        let mut expected = vec!["con espacios.txt", "salto\nlinea.txt", "ñandú_日本.txt"];
+        let mut expected = names;
         expected.sort();
         assert_eq!(untracked, expected);
     }

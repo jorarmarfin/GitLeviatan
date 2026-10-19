@@ -16,7 +16,8 @@ describe("abrir → stage → commit → historial", () => {
     await browser.waitUntil(async () => (await $$('[role="option"]')).length === 1, {
       timeoutMsg: "el historial debería tener el commit inicial",
     });
-    assert.match(await $('[role="option"]').getText(), /Commit inicial/);
+    // El asunto va truncado en pantalla (`getText` solo devuelve lo visible): se lee el nombre accesible.
+    assert.match(await $('[role="option"]').getAttribute("aria-label"), /Commit inicial/);
   });
 
   it("prepara el archivo sin seguimiento", async () => {
@@ -40,7 +41,7 @@ describe("abrir → stage → commit → historial", () => {
       timeoutMsg: "el historial debería mostrar el commit nuevo",
     });
     const first = await $$('[role="option"]')[0];
-    assert.match(await first.getText(), new RegExp(MESSAGE));
+    assert.match(await first.getAttribute("aria-label"), new RegExp(MESSAGE));
   });
 
   it("muestra el detalle del commit y coincide con lo que ve la CLI", async () => {
@@ -48,7 +49,7 @@ describe("abrir → stage → commit → historial", () => {
     await first.click();
     const detail = await $('article[aria-label="Detalle del commit"]');
     await detail.waitForDisplayed();
-    assert.match(await detail.getText(), new RegExp(MESSAGE));
+    assert.match(await detail.getProperty("textContent"), new RegExp(MESSAGE));
 
     const subject = execFileSync("git", ["log", "-1", "--format=%s"], {
       cwd: repo,
