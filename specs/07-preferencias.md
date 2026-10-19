@@ -1,6 +1,6 @@
 # SPEC 07 — Preferencias locales
 
-> **Estado:** Borrador
+> **Estado:** Approved
 > **Depende de:** SPEC 02
 > **Fecha:** 2026-10-19
 > **Objetivo:** Guardar las preferencias básicas (tema, ubicación del ejecutable Git y repositorios recientes) en un archivo de configuración local, con una pantalla de ajustes y detección de Git.
