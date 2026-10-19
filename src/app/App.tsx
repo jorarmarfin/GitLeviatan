@@ -42,14 +42,14 @@ export function App() {
         </p>
       )}
 
-      <div className="grid min-h-0 flex-1 grid-cols-[14rem_1fr_22rem]">
+      <div className="grid min-h-0 flex-1 grid-cols-[14rem_1fr]">
         <aside className="overflow-y-auto border-r border-border p-2">
           <RecentRepositories />
         </aside>
         {active ? (
           <Workspace key={active.id} repository={active} />
         ) : (
-          <main className="col-span-2 p-6 text-muted-foreground">
+          <main className="p-6 text-muted-foreground">
             Abre un repositorio para ver su historial. <br />
             El poder de Git, bajo tu control.
           </main>

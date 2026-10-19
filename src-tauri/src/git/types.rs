@@ -74,3 +74,27 @@ pub struct RecentRepository {
     pub name: String,
     pub last_opened_at: String,
 }
+
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum DiffScope {
+    Staged,
+    Unstaged,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FileDiff {
+    pub path: String,
+    pub original: String,
+    pub modified: String,
+    pub is_binary: bool,
+    pub too_large: bool,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CommitResult {
+    pub oid: String,
+    pub short_oid: String,
+}

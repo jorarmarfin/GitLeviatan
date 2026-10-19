@@ -30,3 +30,15 @@ export type CommitPage = { commits: CommitNode[]; nextCursor: string | null };
 export type RecentRepository = { path: string; name: string; lastOpenedAt: string };
 
 export type GitErrorPayload = { kind: string; message: string; detail: string | null };
+
+export type DiffScope = "staged" | "unstaged";
+
+export type FileDiff = {
+  path: string;
+  original: string;
+  modified: string;
+  isBinary: boolean;
+  tooLarge: boolean; // > 1 MiB: no se envía contenido
+};
+
+export type CommitResult = { oid: string; shortOid: string };
