@@ -1,11 +1,67 @@
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use std::io::{Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Mutex;
+use std::sync::{Mutex, RwLock};
 
 use super::error::GitError;
+
+/// Ejecutable de Git elegido en las preferencias; `None` = buscar `git` en el `PATH`.
+static GIT_PATH: RwLock<Option<PathBuf>> = RwLock::new(None);
+
+/// Cambia el ejecutable de Git; afecta a las operaciones siguientes sin reiniciar.
+pub fn set_git_path(path: Option<PathBuf>) {
+    *GIT_PATH.write().expect("ruta de Git envenenada") = path;
+}
+
+fn git_program() -> OsString {
+    match GIT_PATH.read().expect("ruta de Git envenenada").as_ref() {
+        Some(path) => path.clone().into_os_string(),
+        None => OsString::from("git"),
+    }
+}
+
+fn git_command() -> Command {
+    Command::new(git_program())
+}
+
+/// Busca un ejecutable por nombre en el `PATH` (apoyo de las pruebas).
+#[cfg(test)]
+pub fn find_in_path(name: &str) -> Option<PathBuf> {
+    let paths = std::env::var_os("PATH")?;
+    std::env::split_paths(&paths)
+        .map(|dir| dir.join(name))
+        .find(|candidate| candidate.is_file())
+}
+
+/// Ejecuta `<git> --version` y devuelve la versión (`2.43.0`). Con `None` usa la ruta
+/// configurada actualmente (o el `PATH`).
+pub fn check_git(program: Option<&Path>) -> Result<String, GitError> {
+    let mut command = match program {
+        Some(path) => Command::new(path),
+        None => git_command(),
+    };
+    let output = command
+        .arg("--version")
+        .env("LC_ALL", "C")
+        .stdin(Stdio::null())
+        .output()
+        .map_err(|error| match error.kind() {
+            std::io::ErrorKind::NotFound => GitError::git_missing(),
+            std::io::ErrorKind::PermissionDenied => {
+                GitError::invalid_input("No se puede ejecutar el archivo seleccionado.")
+            }
+            _ => GitError::io(error),
+        })?;
+    let text = String::from_utf8_lossy(&output.stdout);
+    match text.trim().strip_prefix("git version ") {
+        Some(version) if output.status.success() => Ok(version.to_string()),
+        _ => Err(GitError::invalid_input(
+            "El archivo seleccionado no es un ejecutable de Git.",
+        )),
+    }
+}
 
 #[derive(Debug)]
 pub struct GitOutput {
@@ -50,7 +106,7 @@ where
         }
     };
 
-    let mut command = Command::new("git");
+    let mut command = git_command();
     command
         .arg("--literal-pathspecs")
         .args(args)
@@ -154,7 +210,7 @@ where
         return Err(GitError::not_found(dir));
     }
 
-    let mut command = Command::new("git");
+    let mut command = git_command();
     #[cfg(unix)]
     std::os::unix::process::CommandExt::process_group(&mut command, 0);
     command
@@ -255,6 +311,31 @@ mod tests {
         let out = run_git_with_input(&std::env::temp_dir(), ["hash-object", "--stdin"], b"hola\n")
             .unwrap();
         assert_eq!(String::from_utf8_lossy(&out.stdout).trim().len(), 40);
+    }
+
+    #[test]
+    fn check_git_reports_version_for_real_binary() {
+        let real = find_in_path("git").expect("git en el PATH");
+        let version = check_git(Some(&real)).unwrap();
+        assert!(version.chars().next().unwrap().is_ascii_digit());
+    }
+
+    #[test]
+    fn check_git_rejects_fake_path() {
+        let err = check_git(Some(Path::new("/no/existe/git"))).unwrap_err();
+        assert_eq!(err.kind, super::super::error::GitErrorKind::GitMissing);
+    }
+
+    #[test]
+    fn configured_path_is_used_by_following_operations() {
+        // Solo se usa una ruta válida: los demás tests corren Git en paralelo.
+        let real = find_in_path("git").expect("git en el PATH");
+        set_git_path(Some(real.clone()));
+        assert_eq!(git_program(), real.into_os_string());
+        let out = run_git(&std::env::temp_dir(), ["--version"]).unwrap();
+        assert!(String::from_utf8_lossy(&out.stdout).starts_with("git version"));
+        set_git_path(None);
+        assert_eq!(git_program(), OsString::from("git"));
     }
 
     #[test]

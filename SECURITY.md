@@ -16,3 +16,4 @@ Solo la última versión publicada.
 - Las capabilities de Tauri son mínimas; el frontend no tiene shell arbitraria ni acceso directo al sistema de archivos.
 - Los hooks de Git y la configuración del repositorio pueden ejecutar comandos locales con los permisos del usuario. Abre solo repositorios de confianza.
 - Las credenciales se delegan en el SSH agent y en los credential helpers de Git; no se guardan en texto plano.
+- La ruta del ejecutable de Git (Preferencias → `settings.json`) es una elección explícita del usuario: la app ejecutará ese archivo con tus permisos. Antes de guardarla solo se comprueba que responde a `--version` como Git; apunta únicamente a binarios de confianza.

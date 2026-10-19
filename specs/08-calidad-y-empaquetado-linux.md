@@ -1,6 +1,6 @@
 # SPEC 08 — Calidad y empaquetado Linux
 
-> **Estado:** Borrador
+> **Estado:** Implemented
 > **Depende de:** SPEC 01, SPEC 02, SPEC 03, SPEC 04, SPEC 05, SPEC 06, SPEC 07
 > **Fecha:** 2026-10-19
 > **Objetivo:** Dejar el MVP como release candidata usable en Ubuntu, con manejo de errores uniforme, umbrales de rendimiento medidos, auditoría de dependencias, pruebas E2E y paquetes `.deb` y AppImage.

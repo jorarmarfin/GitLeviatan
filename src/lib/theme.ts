@@ -1,26 +1,27 @@
 import type { ThemePreference } from "@/types/theme";
 
-export const THEME_STORAGE_KEY = "gitleviatan:theme:v1";
+/** Clave antigua (SPEC 01). Solo se lee para migrar el tema a `settings.json`. */
+export const LEGACY_THEME_KEY = "gitleviatan:theme:v1";
 
 const VALID: readonly ThemePreference[] = ["light", "dark", "system"];
 
-export function getStoredTheme(): ThemePreference {
+export function readLegacyTheme(): ThemePreference | null {
   try {
-    const value = localStorage.getItem(THEME_STORAGE_KEY);
+    const value = localStorage.getItem(LEGACY_THEME_KEY);
     if (value && (VALID as readonly string[]).includes(value)) {
       return value as ThemePreference;
     }
   } catch {
-    // localStorage no disponible: cae a "system".
+    // localStorage no disponible: nada que migrar.
   }
-  return "system";
+  return null;
 }
 
-export function storeTheme(theme: ThemePreference): void {
+export function clearLegacyTheme(): void {
   try {
-    localStorage.setItem(THEME_STORAGE_KEY, theme);
+    localStorage.removeItem(LEGACY_THEME_KEY);
   } catch {
-    // Sin persistencia; la UI sigue funcionando.
+    // Sin acceso: la migración se reintentaría, pero es idempotente.
   }
 }
 
