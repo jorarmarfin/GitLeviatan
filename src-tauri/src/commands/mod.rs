@@ -4,12 +4,15 @@ use std::path::Path;
 
 use tauri::{AppHandle, Manager, State};
 
+use crate::git::diff;
 use crate::git::error::GitError;
 use crate::git::operations;
 use crate::git::repository::{self, Repositories};
 use crate::git::types::{
-    CommitDetail, CommitPage, RecentRepository, RepositoryRef, RepositoryStatus,
+    CommitDetail, CommitPage, CommitResult, DiffScope, FileDiff, RecentRepository, RepositoryRef,
+    RepositoryStatus,
 };
+use crate::git::write;
 use crate::storage::recent::RecentStore;
 
 /// Comando de prueba para validar el puente `invoke()` Rust ↔ React.
@@ -94,6 +97,47 @@ pub async fn get_commit(
 ) -> Result<CommitDetail, GitError> {
     let path = repositories.path(&repository_id)?;
     blocking(move || operations::get_commit(&path, &oid)).await
+}
+
+#[tauri::command]
+pub async fn stage_files(
+    repositories: State<'_, Repositories>,
+    repository_id: String,
+    paths: Vec<String>,
+) -> Result<(), GitError> {
+    let repo = repositories.path(&repository_id)?;
+    blocking(move || write::stage_files(&repo, &paths)).await
+}
+
+#[tauri::command]
+pub async fn unstage_files(
+    repositories: State<'_, Repositories>,
+    repository_id: String,
+    paths: Vec<String>,
+) -> Result<(), GitError> {
+    let repo = repositories.path(&repository_id)?;
+    blocking(move || write::unstage_files(&repo, &paths)).await
+}
+
+#[tauri::command]
+pub async fn get_diff(
+    repositories: State<'_, Repositories>,
+    repository_id: String,
+    path: String,
+    scope: DiffScope,
+) -> Result<FileDiff, GitError> {
+    let repo = repositories.path(&repository_id)?;
+    blocking(move || diff::get_diff(&repo, &path, scope)).await
+}
+
+#[tauri::command]
+pub async fn create_commit(
+    repositories: State<'_, Repositories>,
+    repository_id: String,
+    message: String,
+) -> Result<CommitResult, GitError> {
+    let repo = repositories.path(&repository_id)?;
+    blocking(move || write::create_commit(&repo, &message)).await
 }
 
 #[cfg(test)]
