@@ -39,13 +39,13 @@ La lista tiene el foco con `Alt+2` (o con `Tab`). La selección sigue al foco y 
 
 ## Proyectos: recientes y cierre
 
-| Atajo                              | Acción                                                                                  |
-| ---------------------------------- | --------------------------------------------------------------------------------------- |
-| `Tab` sobre un proyecto reciente   | Foco en su nombre y, con otro `Tab`, en su **×** (que aparece al enfocarla).            |
-| `Enter` / `Espacio` sobre la **×** | Quita el proyecto de la lista de recientes. No borra el repositorio ni nada del disco.  |
-| `Tab` hasta **Cerrar repositorio** | En la cabecera: vuelve a la pantalla inicial. Deshabilitado durante fetch, pull o push. |
+| Atajo                              | Acción                                                                                                                              |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `Tab` sobre un proyecto reciente   | Foco en su nombre y, con otro `Tab`, en su **×** (que aparece al enfocarla).                                                        |
+| `Enter` / `Espacio` sobre la **×** | Abre un modal para confirmar. El foco empieza en **Cancelar**; `Tab` lleva a **Quitar**. No borra el repositorio ni nada del disco. |
+| `Tab` hasta **Cerrar repositorio** | En la cabecera: vuelve a la pantalla inicial. Deshabilitado durante fetch, pull o push.                                             |
 
-## Diálogos (crear rama, eliminar rama, clonar, Preferencias)
+## Diálogos (crear rama, eliminar rama, quitar de recientes, clonar, Preferencias)
 
 | Atajo               | Acción                                              |
 | ------------------- | --------------------------------------------------- |

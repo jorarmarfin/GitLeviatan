@@ -74,6 +74,12 @@ async function openProject(name: string) {
   await userEvent.click(await within(recents).findByRole("button", { name }));
 }
 
+/** Confirma en el modal «Quitar de recientes». */
+async function confirmRemoval() {
+  const dialog = await screen.findByRole("dialog", { name: "Quitar de recientes" });
+  await userEvent.click(within(dialog).getByRole("button", { name: "Quitar" }));
+}
+
 describe("pie de la ventana", () => {
   it("muestra la versión de la app y ya no el ping", async () => {
     render(<App />);
@@ -114,6 +120,7 @@ describe("abrir, quitar y cerrar proyectos", () => {
     await screen.findByRole("button", { name: "Cerrar repositorio" });
 
     await userEvent.click(screen.getByRole("button", { name: "Quitar uno de recientes" }));
+    await confirmRemoval();
     await waitFor(() =>
       expect(screen.queryByRole("button", { name: "uno" })).not.toBeInTheDocument(),
     );
@@ -132,6 +139,14 @@ describe("abrir, quitar y cerrar proyectos", () => {
     stored = [recent("solo")];
     render(<App />);
     await userEvent.click(await screen.findByRole("button", { name: "Quitar solo de recientes" }));
+    await userEvent.click(
+      within(await screen.findByRole("dialog", { name: "Quitar de recientes" })).getByRole(
+        "button",
+        {
+          name: "Quitar",
+        },
+      ),
+    );
     expect(await screen.findByText("Aún no has abierto repositorios.")).toBeInTheDocument();
   });
 
@@ -143,6 +158,14 @@ describe("abrir, quitar y cerrar proyectos", () => {
     });
     render(<App />);
     await userEvent.click(await screen.findByRole("button", { name: "Quitar uno de recientes" }));
+    await userEvent.click(
+      within(await screen.findByRole("dialog", { name: "Quitar de recientes" })).getByRole(
+        "button",
+        {
+          name: "Quitar",
+        },
+      ),
+    );
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("No se pudo quitar el proyecto de recientes");

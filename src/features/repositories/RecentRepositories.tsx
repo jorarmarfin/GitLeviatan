@@ -1,7 +1,10 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { X } from "lucide-react";
 
 import { useRepositoryStore } from "@/stores/repository";
+import type { RecentRepository } from "@/types/git";
+
+import { RemoveRecentDialog } from "./RemoveRecentDialog";
 
 export function RecentRepositories() {
   const recents = useRepositoryStore((s) => s.recents);
@@ -10,9 +13,24 @@ export function RecentRepositories() {
   const openRepository = useRepositoryStore((s) => s.openRepository);
   const removeRecent = useRepositoryStore((s) => s.removeRecent);
 
+  // Proyecto cuya eliminación espera confirmación en el modal.
+  const [pending, setPending] = useState<RecentRepository | null>(null);
+  const [removing, setRemoving] = useState(false);
+  // Estable: `Modal` vuelve a montar su manejo de foco cuando cambia `onClose`.
+  const closeDialog = useCallback(() => setPending(null), []);
+
   useEffect(() => {
     void loadRecents();
   }, [loadRecents]);
+
+  async function confirmRemove() {
+    if (!pending) return;
+    setRemoving(true);
+    // Si falla, el store deja el error con contexto en la cabecera.
+    await removeRecent(pending.path);
+    setRemoving(false);
+    setPending(null);
+  }
 
   return (
     <nav aria-label="Repositorios recientes" className="flex flex-col gap-1">
@@ -38,7 +56,7 @@ export function RecentRepositories() {
               type="button"
               aria-label={`Quitar ${repo.name} de recientes`}
               title="Quitar de recientes (no borra nada del disco)"
-              onClick={() => void removeRecent(repo.path)}
+              onClick={() => setPending(repo)}
               className="grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground opacity-0 hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100"
             >
               <X className="size-3.5" aria-hidden="true" />
@@ -46,6 +64,14 @@ export function RecentRepositories() {
           </li>
         ))}
       </ul>
+      {pending && (
+        <RemoveRecentDialog
+          repository={pending}
+          busy={removing}
+          onConfirm={() => void confirmRemove()}
+          onClose={closeDialog}
+        />
+      )}
     </nav>
   );
 }

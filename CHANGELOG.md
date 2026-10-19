@@ -9,7 +9,9 @@ como notas de la versión.
 ### Añadido
 
 - **Quitar de recientes:** una **×** junto a cada proyecto de la lista, que solo borra la entrada (no toca el
-  repositorio ni el disco) y es operable con teclado (SPEC 11).
+  repositorio ni el disco) y es operable con teclado. Pide confirmación en un modal de la app (con el foco en
+  **Cancelar**), no en un diálogo nativo del navegador (SPEC 11).
+- Una prueba impide usar `confirm`, `alert` o `prompt` nativos en el código de la app.
 - **Cerrar repositorio:** botón en la cabecera que vuelve a la pantalla inicial. Se deshabilita mientras hay un
   fetch, pull o push en curso, y lo explica (SPEC 11).
 
