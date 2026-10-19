@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { GitMerge, Plus, Trash2 } from "lucide-react";
 
 import { ErrorNotice } from "@/components/ErrorNotice";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,7 @@ import type { RepositoryRef } from "@/types/git";
 
 import { CreateBranchDialog } from "./CreateBranchDialog";
 import { DeleteBranchDialog, type DeleteStage } from "./DeleteBranchDialog";
+import { MergeDialog } from "./MergeDialog";
 import type { BranchInfo } from "./types";
 import { useBranches } from "./useBranches";
 
@@ -19,7 +20,10 @@ type Props = {
   onChanged: () => void;
 };
 
-type Dialog = { type: "create" } | { type: "delete"; branch: BranchInfo; stage: DeleteStage };
+type Dialog =
+  | { type: "create" }
+  | { type: "delete"; branch: BranchInfo; stage: DeleteStage }
+  | { type: "merge"; source: string };
 
 function Sync({ branch }: { branch: BranchInfo }) {
   if (branch.ahead === 0 && branch.behind === 0) return null;
@@ -115,6 +119,21 @@ export function BranchesPanel({ repository, selectedOid, externalVersion, onChan
               size="icon"
               className="size-6"
               disabled={branch.isCurrent || busy}
+              aria-label={`Fusionar «${branch.name}» en la rama actual`}
+              title={
+                branch.isCurrent
+                  ? "Es la rama actual"
+                  : `Fusionar «${branch.name}» en la rama actual`
+              }
+              onClick={() => openDialog({ type: "merge", source: branch.name })}
+            >
+              <GitMerge aria-hidden="true" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-6"
+              disabled={branch.isCurrent || busy}
               aria-label={`Eliminar rama ${branch.name}`}
               title={branch.isCurrent ? "No se puede eliminar la rama actual" : undefined}
               onClick={() => openDialog({ type: "delete", branch, stage: "confirm" })}
@@ -130,16 +149,27 @@ export function BranchesPanel({ repository, selectedOid, externalVersion, onChan
           <h3 className="px-2 text-xs font-semibold uppercase text-muted-foreground">Remotas</h3>
           <ul aria-label="Ramas remotas">
             {remotes.map((branch) => (
-              <li key={branch.name}>
+              <li key={branch.name} className="flex items-center gap-1">
                 <button
                   type="button"
                   disabled={busy}
                   title="Cambiar a esta rama (crea la local con seguimiento)"
                   onClick={() => void checkout(branch.name)}
-                  className="w-full truncate rounded px-2 py-1 text-left text-sm text-muted-foreground hover:bg-accent"
+                  className="min-w-0 flex-1 truncate rounded px-2 py-1 text-left text-sm text-muted-foreground hover:bg-accent"
                 >
                   {branch.name}
                 </button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-6"
+                  disabled={busy}
+                  aria-label={`Fusionar «${branch.name}» en la rama actual`}
+                  title={`Fusionar «${branch.name}» en la rama actual`}
+                  onClick={() => openDialog({ type: "merge", source: branch.name })}
+                >
+                  <GitMerge aria-hidden="true" />
+                </Button>
               </li>
             ))}
           </ul>
@@ -152,6 +182,14 @@ export function BranchesPanel({ repository, selectedOid, externalVersion, onChan
           busy={busy}
           error={error}
           onCreate={create}
+          onClose={closeDialog}
+        />
+      )}
+      {dialog?.type === "merge" && (
+        <MergeDialog
+          repository={repository}
+          source={dialog.source}
+          onChanged={onChanged}
           onClose={closeDialog}
         />
       )}

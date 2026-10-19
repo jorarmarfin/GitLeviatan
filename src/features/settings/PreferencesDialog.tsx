@@ -23,6 +23,7 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
 
   const [gitPath, setGitPath] = useState(settings.gitPath ?? "");
   const [maxRecent, setMaxRecent] = useState(String(settings.maxRecentRepositories));
+  const [reopenLast, setReopenLast] = useState(settings.reopenLastRepository);
   const [error, setError] = useState<AppError | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -43,6 +44,7 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
     const result = await update({
       gitPath: gitPath.trim() === "" ? null : gitPath.trim(),
       maxRecentRepositories: parsedMax,
+      reopenLastRepository: reopenLast,
     });
     if (result.ok) {
       setSaved(true);
@@ -98,6 +100,22 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
               : "No se detecta Git con la configuración actual."}{" "}
             Se ejecutará el archivo que indiques: elige solo binarios de confianza.
           </p>
+        </div>
+
+        <div className="flex items-start gap-2 text-sm">
+          <input
+            id="reopen-last"
+            type="checkbox"
+            checked={reopenLast}
+            onChange={(event) => setReopenLast(event.target.checked)}
+            className="mt-0.5 size-4 accent-primary"
+          />
+          <label htmlFor="reopen-last" className="flex flex-col">
+            Abrir el último proyecto al iniciar
+            <span className="text-xs text-muted-foreground">
+              «Cerrar repositorio» lo olvida: no se vuelve a abrir en el siguiente inicio.
+            </span>
+          </label>
         </div>
 
         <div className="flex flex-col gap-1 text-sm">

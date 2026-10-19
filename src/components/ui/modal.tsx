@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 
@@ -14,9 +14,17 @@ const FOCUSABLE =
 export function Modal({ title, onClose, children }: Props) {
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
+  // Se guarda al renderizar, antes de que el `autoFocus` del contenido mueva el foco al diálogo;
+  // si se leyera en el efecto, ya apuntaría a un elemento de dentro y el foco no volvería.
+  const [previous] = useState(() => document.activeElement as HTMLElement | null);
+  // `onClose` suele ser una función nueva en cada render del padre: se lee desde una ref para que
+  // el manejo de foco (que devuelve el foco al desmontarse) dependa solo del montaje.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
 
   useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null;
     const dialog = dialogRef.current;
     const items = () => Array.from(dialog?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? []);
 
@@ -25,7 +33,7 @@ export function Modal({ title, onClose, children }: Props) {
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== "Tab" || !dialog) return;
@@ -50,7 +58,7 @@ export function Modal({ title, onClose, children }: Props) {
       document.removeEventListener("keydown", onKeyDown);
       previous?.focus?.();
     };
-  }, [onClose]);
+  }, [previous]);
 
   return createPortal(
     <div

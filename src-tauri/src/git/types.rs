@@ -131,6 +131,42 @@ pub enum DeleteBranchOutcome {
     NeedsForce { reason: DeleteReason },
 }
 
+/// Por qué no se puede fusionar ahora mismo.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(tag = "reason", rename_all = "camelCase")]
+pub enum MergeBlock {
+    DetachedHead,
+    LocalChanges { files: Vec<String> },
+}
+
+/// Qué pasaría al fusionar `source` en la rama actual (`target`).
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct MergePreview {
+    pub source: String,
+    pub target: String,
+    pub commits_to_merge: u32,
+    pub up_to_date: bool,
+    pub fast_forward: bool,
+    pub blocked: Option<MergeBlock>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(tag = "status", rename_all = "camelCase")]
+pub enum MergeResult {
+    UpToDate,
+    FastForward {
+        oid: String,
+    },
+    Merged {
+        oid: String,
+    },
+    /// La fusión se canceló sola: el repositorio quedó como estaba.
+    Conflict {
+        files: Vec<String>,
+    },
+}
+
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct RemoteInfo {

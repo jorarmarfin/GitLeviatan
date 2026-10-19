@@ -1,6 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 
-import type { BranchInfo, DeleteBranchOutcome } from "@/features/branches/types";
+import type {
+  BranchInfo,
+  DeleteBranchOutcome,
+  MergePreview,
+  MergeResult,
+} from "@/features/branches/types";
 import type { CommitDetail } from "@/features/graph/types";
 import type {
   CommitPage,
@@ -59,6 +64,7 @@ export const api = {
   openRepository: (path: string) => invoke<RepositoryRef>("open_repository", { path }),
   listRecentRepositories: () => invoke<RecentRepository[]>("list_recent_repositories"),
   removeRecentRepository: (path: string) => invoke<void>("remove_recent_repository", { path }),
+  forgetLastRepository: () => invoke<void>("forget_last_repository"),
   getAppVersion: () => invoke<string>("get_app_version"),
   clearRecentRepositories: () => invoke<void>("clear_recent_repositories"),
   getSettings: () => invoke<Settings>("get_settings"),
@@ -82,6 +88,10 @@ export const api = {
     invoke<void>("create_branch", { repositoryId, name, startPoint }),
   checkoutBranch: (repositoryId: string, branch: string) =>
     invoke<void>("checkout_branch", { repositoryId, branch }),
+  mergePreview: (repositoryId: string, source: string) =>
+    invoke<MergePreview>("merge_preview", { repositoryId, source }),
+  mergeBranch: (repositoryId: string, source: string) =>
+    invoke<MergeResult>("merge_branch", { repositoryId, source }),
   deleteBranch: (repositoryId: string, branch: string, force: boolean) =>
     invoke<DeleteBranchOutcome>("delete_branch", { repositoryId, branch, force }),
   listRemotes: (repositoryId: string) => invoke<RemoteInfo[]>("list_remotes", { repositoryId }),

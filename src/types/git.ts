@@ -64,6 +64,10 @@ export type Settings = {
   theme: ThemePreference;
   gitPath: string | null; // null = buscar en el PATH
   maxRecentRepositories: number; // 5–50
+  /** Abrir al iniciar el último proyecto que estaba abierto. */
+  reopenLastRepository: boolean;
+  /** Último proyecto abierto; lo gestiona el backend (se olvida al cerrarlo). */
+  lastRepositoryPath: string | null;
 };
 
 export type GitInfo = { available: boolean; version: string | null; message: string | null };

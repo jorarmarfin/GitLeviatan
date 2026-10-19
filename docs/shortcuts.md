@@ -37,6 +37,17 @@ La lista tiene el foco con `Alt+2` (o con `Tab`). La selección sigue al foco y 
 | `Tab` → **Preparar todo** | Al inicio del panel: prepara todo (`git add -A`). `Enter` o `Espacio` lo activan. |
 | `Tab` → **Quitar todo**   | En la cabecera de Staged: quita todo de staged sin tocar tus archivos.            |
 
+## Ramas: selector y fusión
+
+| Atajo                                     | Acción                                                                                    |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `Tab` hasta el botón de la rama actual    | En la barra superior (junto a Fetch, Pull y Push). `Enter` o `Espacio` abren el selector. |
+| Escribir en el selector                   | Filtra las ramas por nombre (sin distinguir mayúsculas). El foco empieza en el buscador.  |
+| `↓` / `↑`, `Inicio` / `Fin`               | Mueven la rama resaltada.                                                                 |
+| `Enter` en el selector                    | Cambia a la rama resaltada. `Esc` cierra sin cambiar.                                     |
+| `Tab` hasta **Fusionar** (🔀) de una rama | Abre la vista previa. El foco empieza en **Cancelar**; `Tab` lleva a **Fusionar**.        |
+| `Enter` sobre **Fusionar** en el modal    | Fusiona la rama en la actual. Con conflictos se cancela sola y no cambia nada.            |
+
 ## Proyectos: recientes y cierre
 
 | Atajo                              | Acción                                                                                                                              |
@@ -45,7 +56,7 @@ La lista tiene el foco con `Alt+2` (o con `Tab`). La selección sigue al foco y 
 | `Enter` / `Espacio` sobre la **×** | Abre un modal para confirmar. El foco empieza en **Cancelar**; `Tab` lleva a **Quitar**. No borra el repositorio ni nada del disco. |
 | `Tab` hasta **Cerrar repositorio** | En la cabecera: vuelve a la pantalla inicial. Deshabilitado durante fetch, pull o push.                                             |
 
-## Diálogos (crear rama, eliminar rama, quitar de recientes, clonar, Preferencias)
+## Diálogos (cambiar de rama, fusionar, crear rama, eliminar rama, quitar de recientes, clonar, Preferencias)
 
 | Atajo               | Acción                                              |
 | ------------------- | --------------------------------------------------- |

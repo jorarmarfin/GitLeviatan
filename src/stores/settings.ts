@@ -9,6 +9,8 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: "system",
   gitPath: null,
   maxRecentRepositories: 20,
+  reopenLastRepository: true,
+  lastRepositoryPath: null,
 };
 
 type UpdateResult = { ok: true } | { ok: false; error: AppError };

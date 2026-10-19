@@ -15,7 +15,8 @@ use crate::git::repository::{self, Repositories};
 use crate::git::sync::{self, Operations, SyncContext};
 use crate::git::types::{
     BranchInfo, CommitDetail, CommitPage, CommitResult, DeleteBranchOutcome, DiffScope, FileDiff,
-    RecentRepository, RemoteInfo, RepositoryRef, RepositoryStatus, SyncProgress,
+    MergePreview, MergeResult, RecentRepository, RemoteInfo, RepositoryRef, RepositoryStatus,
+    SyncProgress,
 };
 use crate::git::write;
 use crate::storage::recent::RecentStore;
@@ -62,6 +63,31 @@ impl SettingsState {
             .expect("preferencias envenenadas")
             .clone()
     }
+
+    /// Guarda unas preferencias ya validadas. `lastRepositoryPath` lo gestiona solo el backend
+    /// (al abrir y cerrar proyectos): se conserva el valor actual aunque el frontend, con una
+    /// copia antigua, envíe otro.
+    fn commit_update(&self, mut validated: Settings) -> Result<Settings, AppError> {
+        let mut current = self.current.lock().expect("preferencias envenenadas");
+        validated.last_repository_path = current.last_repository_path.clone();
+        self.store.save(&validated).map_err(AppError::io)?;
+        set_git_path(validated.git_path.clone().map(PathBuf::from));
+        *current = validated.clone();
+        Ok(validated)
+    }
+
+    /// Recuerda (o, con `None`, olvida) el último proyecto abierto.
+    fn set_last_repository(&self, path: Option<String>) -> Result<(), AppError> {
+        let mut current = self.current.lock().expect("preferencias envenenadas");
+        if current.last_repository_path == path {
+            return Ok(());
+        }
+        let mut next = current.clone();
+        next.last_repository_path = path;
+        self.store.save(&next).map_err(AppError::io)?;
+        *current = next;
+        Ok(())
+    }
 }
 
 fn config_dir(app: &AppHandle) -> Result<PathBuf, AppError> {
@@ -96,6 +122,11 @@ async fn open_path(
 ) -> Result<RepositoryRef, AppError> {
     let top = blocking(move || repository::resolve_toplevel(Path::new(&path))).await?;
     let repo = repositories.register(top);
+
+    // Recordar el último proyecto no debe impedir abrirlo.
+    if let Err(error) = settings.set_last_repository(Some(repo.path.clone())) {
+        eprintln!("no se pudo recordar el último proyecto: {}", error.message);
+    }
 
     // Fallar al guardar recientes no debe impedir abrir el repositorio.
     if let Ok(store) = recent_store(app, settings) {
@@ -140,6 +171,12 @@ pub async fn remove_recent_repository(
     blocking(move || store.remove(&path).map_err(AppError::io)).await
 }
 
+/// Olvida el último proyecto abierto (al cerrarlo con «Cerrar repositorio»).
+#[tauri::command]
+pub fn forget_last_repository(settings: State<'_, SettingsState>) -> Result<(), AppError> {
+    settings.set_last_repository(None)
+}
+
 #[tauri::command]
 pub fn get_settings(settings: State<'_, SettingsState>) -> Settings {
     settings.get()
@@ -154,11 +191,7 @@ pub async fn update_settings(
     new_settings: Settings,
 ) -> Result<Settings, AppError> {
     let validated = blocking(move || new_settings.validated()).await?;
-    let mut current = settings.current.lock().expect("preferencias envenenadas");
-    settings.store.save(&validated).map_err(AppError::io)?;
-    set_git_path(validated.git_path.clone().map(PathBuf::from));
-    *current = validated.clone();
-    drop(current);
+    let validated = settings.commit_update(validated)?;
 
     // Si bajó el límite, la lista de recientes se recorta de inmediato.
     if let Ok(store) = recent_store(&app, &settings) {
@@ -316,6 +349,28 @@ pub async fn checkout_branch(
     blocking(move || branches::checkout_branch(&repo, &branch)).await
 }
 
+/// Qué pasaría al fusionar `source` en la rama actual. No modifica nada.
+#[tauri::command]
+pub async fn merge_preview(
+    repositories: State<'_, Repositories>,
+    repository_id: String,
+    source: String,
+) -> Result<MergePreview, AppError> {
+    let repo = repositories.path(&repository_id)?;
+    blocking(move || branches::merge_preview(&repo, &source)).await
+}
+
+/// Fusiona `source` en la rama actual; con conflictos cancela la fusión y lista los archivos.
+#[tauri::command]
+pub async fn merge_branch(
+    repositories: State<'_, Repositories>,
+    repository_id: String,
+    source: String,
+) -> Result<MergeResult, AppError> {
+    let repo = repositories.path(&repository_id)?;
+    blocking(move || branches::merge_branch(&repo, &source)).await
+}
+
 #[tauri::command]
 pub async fn delete_branch(
     repositories: State<'_, Repositories>,
@@ -428,4 +483,79 @@ pub async fn clone_repository(
 #[tauri::command]
 pub fn cancel_operation(operations: State<'_, Operations>, operation_id: String) -> bool {
     operations.cancel(&operation_id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn state() -> (tempfile::TempDir, SettingsState) {
+        let dir = tempfile::tempdir().unwrap();
+        let state = SettingsState::load(dir.path().to_path_buf());
+        (dir, state)
+    }
+
+    #[test]
+    fn remembers_and_forgets_the_last_repository_across_restarts() {
+        let (dir, state) = state();
+        assert_eq!(state.get().last_repository_path, None);
+
+        state
+            .set_last_repository(Some("/home/ana/proyecto".into()))
+            .unwrap();
+        // Un reinicio: se vuelve a leer del disco.
+        let again = SettingsState::load(dir.path().to_path_buf());
+        assert_eq!(
+            again.get().last_repository_path.as_deref(),
+            Some("/home/ana/proyecto")
+        );
+
+        again.set_last_repository(None).unwrap();
+        let third = SettingsState::load(dir.path().to_path_buf());
+        assert_eq!(third.get().last_repository_path, None);
+    }
+
+    #[test]
+    fn setting_the_same_value_does_not_rewrite_the_file() {
+        let (dir, state) = state();
+        state.set_last_repository(Some("/a".into())).unwrap();
+        let file = dir.path().join("settings.json");
+        let before = std::fs::metadata(&file).unwrap().modified().unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        state.set_last_repository(Some("/a".into())).unwrap();
+        assert_eq!(
+            std::fs::metadata(&file).unwrap().modified().unwrap(),
+            before
+        );
+    }
+
+    #[test]
+    fn a_settings_update_never_overwrites_the_last_repository() {
+        let (_dir, state) = state();
+        state.set_last_repository(Some("/real".into())).unwrap();
+
+        // El frontend envía una copia antigua con otra ruta (o ninguna).
+        let stale = Settings {
+            theme: crate::storage::settings::Theme::Dark,
+            last_repository_path: Some("/antigua".into()),
+            ..Settings::default()
+        };
+        let saved = state.commit_update(stale).unwrap();
+
+        assert_eq!(saved.last_repository_path.as_deref(), Some("/real"));
+        assert_eq!(state.get().last_repository_path.as_deref(), Some("/real"));
+        assert_eq!(state.get().theme, crate::storage::settings::Theme::Dark);
+    }
+
+    #[test]
+    fn the_reopen_preference_is_saved_by_updates() {
+        let (dir, state) = state();
+        let off = Settings {
+            reopen_last_repository: false,
+            ..Settings::default()
+        };
+        state.commit_update(off).unwrap();
+        let again = SettingsState::load(dir.path().to_path_buf());
+        assert!(!again.get().reopen_last_repository);
+    }
 }
