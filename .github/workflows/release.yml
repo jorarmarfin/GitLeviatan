@@ -1,0 +1,83 @@
+name: Release
+
+# Un tag vX.Y.Z construye el .deb y el AppImage y los adjunta a una release de GitHub.
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    # Ubuntu 22.04: la glibc más antigua soportada; los paquetes funcionan en versiones posteriores.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: La versión de tauri.conf.json debe coincidir con el tag
+        run: |
+          version="$(jq -r .version src-tauri/tauri.conf.json)"
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "El tag $GITHUB_REF_NAME no coincide con la versión $version de tauri.conf.json" >&2
+            exit 1
+          fi
+
+      - name: Dependencias del sistema (Tauri 2)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf build-essential libssl-dev libxdo-dev
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: pnpm install --frozen-lockfile
+
+      # Mismas comprobaciones que el CI: no se publica nada que no pase.
+      - name: Lint y tests
+        run: |
+          pnpm lint
+          pnpm test
+          cargo test --manifest-path src-tauri/Cargo.toml
+
+      - name: Paquetes .deb y AppImage
+        run: pnpm tauri build --bundles deb,appimage
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+
+      - name: Notas de la versión (desde CHANGELOG.md)
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '
+            $0 ~ "^## \\[" v "\\]" { found=1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "CHANGELOG.md no tiene una sección ## [$version]" >&2
+            exit 1
+          fi
+
+      - name: Publicar release con ambos paquetes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          deb="$(ls src-tauri/target/release/bundle/deb/*.deb)"
+          appimage="$(ls src-tauri/target/release/bundle/appimage/*.AppImage)"
+          sha256sum "$deb" "$appimage" > SHA256SUMS.txt
+          gh release create "$GITHUB_REF_NAME" "$deb" "$appimage" SHA256SUMS.txt \
+            --title "GitLeviatán $GITHUB_REF_NAME" \
+            --notes-file release-notes.md

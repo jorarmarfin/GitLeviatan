@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
 
-import { api, errorMessage } from "@/lib/api";
-import type { RemoteInfo, RepositoryRef } from "@/types/git";
+import { ErrorNotice } from "@/components/ErrorNotice";
+import { api, toAppError } from "@/lib/api";
+import type { AppError, RemoteInfo, RepositoryRef } from "@/types/git";
 
 type Props = { repository: RepositoryRef; externalVersion: number };
 
 /** Remotos del repositorio con su URL (sin credenciales). */
 export function RemotesPanel({ repository, externalVersion }: Props) {
   const [remotes, setRemotes] = useState<RemoteInfo[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AppError | null>(null);
 
   useEffect(() => {
     let current = true;
@@ -19,7 +20,7 @@ export function RemotesPanel({ repository, externalVersion }: Props) {
         setRemotes(next);
         setError(null);
       })
-      .catch((e: unknown) => current && setError(errorMessage(e)));
+      .catch((e: unknown) => current && setError(toAppError(e)));
     return () => {
       current = false;
     };
@@ -27,9 +28,9 @@ export function RemotesPanel({ repository, externalVersion }: Props) {
 
   if (error) {
     return (
-      <p role="alert" className="px-2 text-sm text-destructive">
-        {error}
-      </p>
+      <div className="px-2">
+        <ErrorNotice error={error} title="No se pudieron cargar los remotos" />
+      </div>
     );
   }
   if (!remotes) return null;

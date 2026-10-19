@@ -1,8 +1,9 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 
-import { api, errorMessage } from "@/lib/api";
+import { ErrorNotice } from "@/components/ErrorNotice";
+import { api, toAppError } from "@/lib/api";
 import { useIsDark } from "@/lib/useIsDark";
-import type { DiffScope, FileDiff, RepositoryRef } from "@/types/git";
+import type { AppError, DiffScope, FileDiff, RepositoryRef } from "@/types/git";
 
 // Monaco es pesado: solo se descarga al abrir el primer diff.
 const MonacoDiff = lazy(() => import("./MonacoDiff"));
@@ -12,7 +13,7 @@ export type DiffSelection = { path: string; scope: DiffScope };
 type Props = { repository: RepositoryRef; selection: DiffSelection | null; refreshKey: number };
 
 type Load =
-  { phase: "loading" } | { phase: "error"; message: string } | { phase: "ready"; diff: FileDiff };
+  { phase: "loading" } | { phase: "error"; error: AppError } | { phase: "ready"; diff: FileDiff };
 
 function Notice({ children }: { children: React.ReactNode }) {
   return <p className="p-4 text-sm text-muted-foreground">{children}</p>;
@@ -45,7 +46,7 @@ function DiffContent({
     api
       .getDiff(repository.id, selection.path, selection.scope)
       .then((diff) => current && setLoad({ phase: "ready", diff }))
-      .catch((e: unknown) => current && setLoad({ phase: "error", message: errorMessage(e) }));
+      .catch((e: unknown) => current && setLoad({ phase: "error", error: toAppError(e) }));
     return () => {
       current = false;
     };
@@ -54,9 +55,9 @@ function DiffContent({
   if (load.phase === "loading") return <Notice>Cargando diff…</Notice>;
   if (load.phase === "error") {
     return (
-      <p role="alert" className="p-4 text-sm text-destructive">
-        {load.message}
-      </p>
+      <div className="p-4">
+        <ErrorNotice error={load.error} title="No se pudo cargar el diff" />
+      </div>
     );
   }
 

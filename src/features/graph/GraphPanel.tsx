@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { api, errorMessage } from "@/lib/api";
-import type { CommitNode, RepositoryRef } from "@/types/git";
+import { ErrorNotice } from "@/components/ErrorNotice";
+import { api, toAppError } from "@/lib/api";
+import type { AppError, CommitNode, RepositoryRef } from "@/types/git";
 
 import { GraphView } from "./GraphView";
 import { computeGraphRows } from "./layout";
@@ -26,7 +27,7 @@ type Props = {
 export function GraphPanel({ repository, selectedOid, onSelect }: Props) {
   const [data, setData] = useState<Data | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AppError | null>(null);
 
   useEffect(() => {
     let current = true;
@@ -37,7 +38,7 @@ export function GraphPanel({ repository, selectedOid, onSelect }: Props) {
         const { rows, state } = computeGraphRows(page.commits);
         setData({ commits: page.commits, rows, layout: state, nextCursor: page.nextCursor });
       })
-      .catch((e: unknown) => current && setError(errorMessage(e)));
+      .catch((e: unknown) => current && setError(toAppError(e)));
     return () => {
       current = false;
     };
@@ -61,15 +62,15 @@ export function GraphPanel({ repository, selectedOid, onSelect }: Props) {
           };
         });
       })
-      .catch((e: unknown) => setError(errorMessage(e)))
+      .catch((e: unknown) => setError(toAppError(e)))
       .finally(() => setLoadingMore(false));
   }, [repository.id, nextCursor]);
 
   if (error) {
     return (
-      <p role="alert" className="p-3 text-sm text-destructive">
-        {error}
-      </p>
+      <div className="p-3">
+        <ErrorNotice error={error} title="No se pudo cargar el historial" />
+      </div>
     );
   }
   if (!data) return <p className="p-3 text-sm">Cargando historial…</p>;

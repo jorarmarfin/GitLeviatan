@@ -35,7 +35,7 @@ export function Workspace({ repository }: { repository: RepositoryRef }) {
       <div className="flex min-h-0 flex-col">
         <SyncBar repository={repository} externalVersion={version} onChanged={refresh} />
         <div className="grid min-h-0 flex-1 grid-cols-[1fr_22rem]">
-          <main className="min-h-0 overflow-hidden">
+          <main data-area="graph" className="min-h-0 overflow-hidden">
             <GraphPanel
               key={version}
               repository={repository}
@@ -56,7 +56,11 @@ export function Workspace({ repository }: { repository: RepositoryRef }) {
             )}
           </aside>
         </div>
-        <section aria-label="Cambios" className="h-[45%] min-h-64 shrink-0 border-t border-border">
+        <section
+          aria-label="Cambios"
+          data-area="changes"
+          className="h-[45%] min-h-64 shrink-0 border-t border-border"
+        >
           <ChangesPanel
             repository={repository}
             onCommitted={handleCommitted}

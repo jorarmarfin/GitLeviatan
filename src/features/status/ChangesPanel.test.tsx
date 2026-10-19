@@ -122,9 +122,22 @@ describe("ChangesPanel", () => {
     expect(screen.getByLabelText("Mensaje de commit")).toHaveValue("");
   });
 
+  it("Ctrl+Enter en el mensaje crea el commit (solo con staged y mensaje)", async () => {
+    const onCommitted = await renderPanel();
+    const box = screen.getByLabelText("Mensaje de commit");
+    await userEvent.click(box);
+    await userEvent.keyboard("{Control>}{Enter}{/Control}");
+    expect(api.createCommit).not.toHaveBeenCalled();
+
+    await userEvent.type(box, "Con teclado");
+    await userEvent.keyboard("{Control>}{Enter}{/Control}");
+    expect(api.createCommit).toHaveBeenCalledWith("repo-1", "Con teclado");
+    await vi.waitFor(() => expect(onCommitted).toHaveBeenCalledTimes(1));
+  });
+
   it("si falla un hook muestra su salida y conserva el mensaje", async () => {
     vi.mocked(api.createCommit).mockRejectedValue({
-      kind: "command",
+      kind: "git",
       message: "pre-commit hook failed",
       detail: "el hook rechazó el commit\nlínea 2",
     });

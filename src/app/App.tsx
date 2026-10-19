@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import logo from "@/assets/logo.png";
+import { ErrorNotice } from "@/components/ErrorNotice";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { GitMissingScreen } from "@/features/settings/GitMissingScreen";
 import { PreferencesButton } from "@/features/settings/PreferencesButton";
@@ -11,6 +12,7 @@ import { ping } from "@/lib/ping";
 import { Sidebar } from "@/app/Sidebar";
 import { Workspace } from "@/app/Workspace";
 import { useApplyTheme } from "@/lib/useApplyTheme";
+import { useGlobalShortcuts } from "@/lib/useGlobalShortcuts";
 import { useRepositoryStore } from "@/stores/repository";
 import { useSettingsStore } from "@/stores/settings";
 
@@ -20,11 +22,15 @@ export function App() {
   const error = useRepositoryStore((s) => s.error);
   const theme = useSettingsStore((s) => s.settings.theme);
   const git = useSettingsStore((s) => s.git);
+  const settingsError = useSettingsStore((s) => s.loadError);
   const loadSettings = useSettingsStore((s) => s.load);
   const detectGit = useSettingsStore((s) => s.detectGit);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
 
+  const openPreferences = useCallback(() => setPreferencesOpen(true), []);
+
   useApplyTheme(theme);
+  useGlobalShortcuts({ onPreferences: openPreferences });
 
   useEffect(() => {
     void loadSettings();
@@ -48,17 +54,19 @@ export function App() {
           <CloneRepositoryButton />
           <OpenRepositoryButton />
           <ThemeToggle />
-          <PreferencesButton onClick={() => setPreferencesOpen(true)} />
+          <PreferencesButton onClick={openPreferences} />
         </div>
       </header>
 
-      {error && (
-        <p
-          role="alert"
-          className="border-b border-border bg-destructive/10 px-4 py-2 text-sm text-destructive"
-        >
-          {error}
-        </p>
+      {(error || settingsError) && (
+        <div className="border-b border-border bg-destructive/10 px-4 py-2">
+          <ErrorNotice
+            error={(error ?? settingsError)!}
+            title={
+              error ? "No se pudo completar la operación" : "No se pudieron cargar las preferencias"
+            }
+          />
+        </div>
       )}
 
       <div className="grid min-h-0 flex-1 grid-cols-[14rem_1fr]">

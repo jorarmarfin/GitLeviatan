@@ -1,13 +1,13 @@
 use std::path::Path;
 
-use super::error::GitError;
+use super::error::AppError;
 use super::parse::{parse_commit_detail, parse_log, parse_status, DETAIL_FORMAT, LOG_FORMAT};
 use super::process::run_git;
 use super::types::{CommitDetail, CommitPage, RepositoryStatus};
 
 pub const MAX_PAGE_SIZE: usize = 500;
 
-pub fn get_status(repo: &Path) -> Result<RepositoryStatus, GitError> {
+pub fn get_status(repo: &Path) -> Result<RepositoryStatus, AppError> {
     let out = run_git(repo, ["status", "--porcelain=v2", "-z", "--branch"])?;
     parse_status(&out.stdout)
 }
@@ -17,12 +17,12 @@ pub fn list_commits(
     repo: &Path,
     cursor: Option<&str>,
     limit: usize,
-) -> Result<CommitPage, GitError> {
+) -> Result<CommitPage, AppError> {
     let skip: usize = match cursor {
         None => 0,
         Some(value) => value
             .parse()
-            .map_err(|_| GitError::invalid_input(format!("Cursor inválido: {value}")))?,
+            .map_err(|_| AppError::invalid_input(format!("Cursor inválido: {value}")))?,
     };
     let limit = limit.clamp(1, MAX_PAGE_SIZE);
 
@@ -60,9 +60,9 @@ pub(crate) fn is_valid_oid(oid: &str) -> bool {
 
 /// Detalle de un commit. `oid` se valida como hexadecimal para que nunca se
 /// interprete como una opción de Git.
-pub fn get_commit(repo: &Path, oid: &str) -> Result<CommitDetail, GitError> {
+pub fn get_commit(repo: &Path, oid: &str) -> Result<CommitDetail, AppError> {
     if !is_valid_oid(oid) {
-        return Err(GitError::invalid_input(format!(
+        return Err(AppError::invalid_input(format!(
             "Identificador de commit inválido: {oid}"
         )));
     }
@@ -243,7 +243,7 @@ mod tests {
         git(repo.path(), &["commit", "-q", "--allow-empty", "-m", "uno"]);
         assert_eq!(
             get_commit(repo.path(), "--output=/tmp/x").unwrap_err().kind,
-            crate::git::error::GitErrorKind::InvalidInput
+            crate::git::error::AppErrorKind::Validation
         );
         assert!(get_commit(repo.path(), "deadbeefdeadbeef").is_err());
     }
@@ -257,6 +257,46 @@ mod tests {
         let refs = &page.commits[0].refs;
         assert!(refs.contains(&"HEAD -> refs/heads/main".to_string()));
         assert!(refs.contains(&"tag: refs/tags/v1".to_string()));
+    }
+
+    /// Umbrales de `tests/perf/thresholds.json` (SPEC 08). Se toma el mejor de 3 intentos
+    /// para que el ruido del CI no dé falsos positivos.
+    #[test]
+    fn perf_stays_within_thresholds() {
+        let thresholds: serde_json::Value =
+            serde_json::from_str(include_str!("../../../tests/perf/thresholds.json")).unwrap();
+        let max_ms = |key: &str| thresholds[key]["maxMs"].as_f64().unwrap();
+        let best = |mut work: Box<dyn FnMut()>| {
+            (0..3)
+                .map(|_| {
+                    let started = std::time::Instant::now();
+                    work();
+                    started.elapsed().as_secs_f64() * 1000.0
+                })
+                .fold(f64::MAX, f64::min)
+        };
+
+        let repo = crate::git::testutil::perf_repo(10_000);
+        let path = repo.path().to_path_buf();
+        let page = best(Box::new({
+            let path = path.clone();
+            move || {
+                assert_eq!(list_commits(&path, None, 500).unwrap().commits.len(), 500);
+            }
+        }));
+        let status = best(Box::new(move || {
+            get_status(&path).unwrap();
+        }));
+        eprintln!("PERF list_commits(500)={page:.1}ms get_status={status:.1}ms");
+
+        assert!(
+            page <= max_ms("backend_list_commits_page_11k"),
+            "list_commits tardó {page:.1} ms"
+        );
+        assert!(
+            status <= max_ms("backend_get_status_11k"),
+            "get_status tardó {status:.1} ms"
+        );
     }
 
     /// Medición manual (no corre en CI):

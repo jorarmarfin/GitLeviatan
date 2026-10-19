@@ -3,6 +3,7 @@ import { Minus, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { DiffViewer, type DiffSelection } from "@/features/diffs/DiffViewer";
+import { ErrorNotice } from "@/components/ErrorNotice";
 import type { ChangedFile, DiffScope, RepositoryRef, RepositoryStatus } from "@/types/git";
 
 import { CommitBox } from "./CommitBox";
@@ -95,9 +96,9 @@ export function ChangesPanel({ repository, onCommitted, externalVersion = 0 }: P
 
   if (loadError) {
     return (
-      <p role="alert" className="p-3 text-sm text-destructive">
-        {loadError}
-      </p>
+      <div className="p-3">
+        <ErrorNotice error={loadError} title="No se pudo leer el estado del repositorio" />
+      </div>
     );
   }
   if (!status) return <p className="p-3 text-sm">Cargando cambios…</p>;

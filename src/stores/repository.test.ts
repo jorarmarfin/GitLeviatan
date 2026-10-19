@@ -29,7 +29,7 @@ describe("repository store", () => {
     useRepositoryStore.setState({ active: repo });
     vi.mocked(api.openRepository).mockImplementation(() =>
       Promise.reject({
-        kind: "notARepository",
+        kind: "git",
         message: "La carpeta seleccionada no es un repositorio Git.",
         detail: null,
       }),
@@ -37,7 +37,8 @@ describe("repository store", () => {
     await useRepositoryStore.getState().openRepository("/tmp/x");
     const state = useRepositoryStore.getState();
     expect(state.active).toEqual(repo);
-    expect(state.error).toMatch(/no es un repositorio/);
+    expect(state.error?.message).toMatch(/no es un repositorio/);
+    expect(state.error?.kind).toBe("git");
   });
 });
 

@@ -1,12 +1,10 @@
 //! Errores de red/sincronización y su clasificación a partir del stderr de Git.
 
-use serde::Serialize;
-
-use super::error::GitError;
+use super::error::{AppError, AppErrorKind};
 use super::remotes::sanitize_text;
 
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
+/// Clasificación fina del stderr de Git; se proyecta sobre `AppErrorKind` y fija el mensaje.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SyncErrorKind {
     Auth,
     Network,
@@ -14,75 +12,43 @@ pub enum SyncErrorKind {
     Conflict,
     Permission,
     RemoteNotFound,
-    Cancelled,
     Unknown,
 }
 
-#[derive(Debug, Clone, Serialize)]
-pub struct SyncError {
-    pub kind: SyncErrorKind,
-    pub message: String,
-    pub detail: String,
-}
-
-impl SyncError {
-    pub fn cancelled() -> Self {
-        Self {
-            kind: SyncErrorKind::Cancelled,
-            message: "Operación cancelada.".into(),
-            detail: String::new(),
-        }
-    }
-
-    pub fn invalid_input(message: impl Into<String>) -> Self {
-        Self {
-            kind: SyncErrorKind::Unknown,
-            message: message.into(),
-            detail: String::new(),
-        }
-    }
-
-    /// Clasifica el stderr de Git (generado con `LC_ALL=C`). El detalle que se devuelve
-    /// ya está saneado: nunca contiene credenciales incrustadas en URLs.
-    pub fn from_stderr(stderr: &str) -> Self {
-        let kind = classify(stderr);
-        let detail = sanitize_text(stderr.trim());
-        let message = match kind {
-            SyncErrorKind::Auth if has(stderr, &["host key verification failed"]) => {
-                "No se pudo verificar la huella del servidor SSH. Conéctate una vez desde una terminal (ssh usuario@servidor) para aceptarla."
-            }
-            SyncErrorKind::Auth => {
-                "Falló la autenticación. Revisa tu clave SSH (ssh-agent) o el credential helper de Git; la app no pide contraseñas."
-            }
-            SyncErrorKind::Network => "Sin conexión con el remoto. Revisa tu red e inténtalo de nuevo.",
-            SyncErrorKind::NonFastForward => {
-                "El remoto tiene cambios que no tienes en local. Haz pull (o fetch) e inténtalo de nuevo; no se modificó nada."
-            }
-            SyncErrorKind::Conflict => {
-                "Hay cambios locales o conflictos que impiden la operación. No se modificó nada."
-            }
-            SyncErrorKind::Permission => "No tienes permiso para realizar esta operación en el remoto.",
-            SyncErrorKind::RemoteNotFound => "El remoto o el repositorio no existe o no es accesible.",
-            SyncErrorKind::Cancelled => "Operación cancelada.",
-            SyncErrorKind::Unknown => "Git terminó con un error.",
-        }
-        .to_string();
-        Self {
-            kind,
-            message,
-            detail,
+impl SyncErrorKind {
+    fn app_kind(self) -> AppErrorKind {
+        match self {
+            Self::Auth | Self::Permission => AppErrorKind::Auth,
+            Self::Network => AppErrorKind::Network,
+            Self::RemoteNotFound => AppErrorKind::NotFound,
+            Self::NonFastForward | Self::Conflict | Self::Unknown => AppErrorKind::Git,
         }
     }
 }
 
-impl From<GitError> for SyncError {
-    fn from(error: GitError) -> Self {
-        Self {
-            kind: SyncErrorKind::Unknown,
-            message: sanitize_text(&error.message),
-            detail: error.detail.map(|d| sanitize_text(&d)).unwrap_or_default(),
+/// Convierte el stderr de una operación de red fallida en un `AppError` con mensaje
+/// legible. El detalle va saneado: nunca contiene credenciales incrustadas en URLs.
+pub fn app_error_from_stderr(stderr: &str) -> AppError {
+    let kind = classify(stderr);
+    let message = match kind {
+        SyncErrorKind::Auth if has(stderr, &["host key verification failed"]) => {
+            "No se pudo verificar la huella del servidor SSH. Conéctate una vez desde una terminal (ssh usuario@servidor) para aceptarla."
         }
-    }
+        SyncErrorKind::Auth => {
+            "Falló la autenticación. Revisa tu clave SSH (ssh-agent) o el credential helper de Git; la app no pide contraseñas."
+        }
+        SyncErrorKind::Network => "Sin conexión con el remoto. Revisa tu red e inténtalo de nuevo.",
+        SyncErrorKind::NonFastForward => {
+            "El remoto tiene cambios que no tienes en local. Haz pull (o fetch) e inténtalo de nuevo; no se modificó nada."
+        }
+        SyncErrorKind::Conflict => {
+            "Hay cambios locales o conflictos que impiden la operación. No se modificó nada."
+        }
+        SyncErrorKind::Permission => "No tienes permiso para realizar esta operación en el remoto.",
+        SyncErrorKind::RemoteNotFound => "El remoto o el repositorio no existe o no es accesible.",
+        SyncErrorKind::Unknown => "Git terminó con un error.",
+    };
+    AppError::new(kind.app_kind(), message, Some(sanitize_text(stderr.trim())))
 }
 
 fn has(text: &str, needles: &[&str]) -> bool {
@@ -203,10 +169,10 @@ mod tests {
 
     #[test]
     fn host_key_has_specific_message() {
-        let e = SyncError::from_stderr(
+        let e = app_error_from_stderr(
             "Host key verification failed.\nfatal: Could not read from remote repository.",
         );
-        assert_eq!(e.kind, SyncErrorKind::Auth);
+        assert_eq!(e.kind, AppErrorKind::Auth);
         assert!(e.message.contains("huella"));
     }
 
@@ -282,16 +248,19 @@ mod tests {
 
     #[test]
     fn falls_back_to_unknown_with_raw_detail() {
-        let e = SyncError::from_stderr("algo raro que Git nunca dijo antes");
-        assert_eq!(e.kind, SyncErrorKind::Unknown);
-        assert_eq!(e.detail, "algo raro que Git nunca dijo antes");
+        let e = app_error_from_stderr("algo raro que Git nunca dijo antes");
+        assert_eq!(e.kind, AppErrorKind::Git);
+        assert_eq!(
+            e.detail.as_deref(),
+            Some("algo raro que Git nunca dijo antes")
+        );
     }
 
     #[test]
     fn detail_never_contains_credentials() {
-        let e = SyncError::from_stderr("fatal: unable to access 'https://u:secreto@h.com/r.git/': Could not resolve host: h.com");
-        assert_eq!(e.kind, SyncErrorKind::Network);
-        assert!(!e.detail.contains("secreto"));
+        let e = app_error_from_stderr("fatal: unable to access 'https://u:secreto@h.com/r.git/': Could not resolve host: h.com");
+        assert_eq!(e.kind, AppErrorKind::Network);
+        assert!(!e.detail.unwrap().contains("secreto"));
         assert!(!e.message.contains("secreto"));
     }
 }

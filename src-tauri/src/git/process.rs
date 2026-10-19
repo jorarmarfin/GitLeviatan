@@ -5,7 +5,7 @@ use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, RwLock};
 
-use super::error::GitError;
+use super::error::AppError;
 
 /// Ejecutable de Git elegido en las preferencias; `None` = buscar `git` en el `PATH`.
 static GIT_PATH: RwLock<Option<PathBuf>> = RwLock::new(None);
@@ -37,7 +37,7 @@ pub fn find_in_path(name: &str) -> Option<PathBuf> {
 
 /// Ejecuta `<git> --version` y devuelve la versión (`2.43.0`). Con `None` usa la ruta
 /// configurada actualmente (o el `PATH`).
-pub fn check_git(program: Option<&Path>) -> Result<String, GitError> {
+pub fn check_git(program: Option<&Path>) -> Result<String, AppError> {
     let mut command = match program {
         Some(path) => Command::new(path),
         None => git_command(),
@@ -48,16 +48,16 @@ pub fn check_git(program: Option<&Path>) -> Result<String, GitError> {
         .stdin(Stdio::null())
         .output()
         .map_err(|error| match error.kind() {
-            std::io::ErrorKind::NotFound => GitError::git_missing(),
+            std::io::ErrorKind::NotFound => AppError::git_missing(),
             std::io::ErrorKind::PermissionDenied => {
-                GitError::invalid_input("No se puede ejecutar el archivo seleccionado.")
+                AppError::invalid_input("No se puede ejecutar el archivo seleccionado.")
             }
-            _ => GitError::io(error),
+            _ => AppError::io(error),
         })?;
     let text = String::from_utf8_lossy(&output.stdout);
     match text.trim().strip_prefix("git version ") {
         Some(version) if output.status.success() => Ok(version.to_string()),
-        _ => Err(GitError::invalid_input(
+        _ => Err(AppError::invalid_input(
             "El archivo seleccionado no es un ejecutable de Git.",
         )),
     }
@@ -72,7 +72,7 @@ pub struct GitOutput {
 ///
 /// `LC_ALL=C` fija los mensajes en inglés para poder clasificar errores y
 /// `GIT_TERMINAL_PROMPT=0` evita que Git espere entrada en una terminal inexistente.
-pub fn run_git<I, S>(dir: &Path, args: I) -> Result<GitOutput, GitError>
+pub fn run_git<I, S>(dir: &Path, args: I) -> Result<GitOutput, AppError>
 where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
@@ -81,7 +81,7 @@ where
 }
 
 /// Igual que `run_git`, pero escribe `input` en la entrada estándar de Git.
-pub fn run_git_with_input<I, S>(dir: &Path, args: I, input: &[u8]) -> Result<GitOutput, GitError>
+pub fn run_git_with_input<I, S>(dir: &Path, args: I, input: &[u8]) -> Result<GitOutput, AppError>
 where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
@@ -89,20 +89,20 @@ where
     run(dir, args, Some(input))
 }
 
-fn run<I, S>(dir: &Path, args: I, input: Option<&[u8]>) -> Result<GitOutput, GitError>
+fn run<I, S>(dir: &Path, args: I, input: Option<&[u8]>) -> Result<GitOutput, AppError>
 where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
     if !dir.is_dir() {
-        return Err(GitError::not_found(dir));
+        return Err(AppError::not_found(dir));
     }
 
     let to_error = |error: std::io::Error| {
         if error.kind() == std::io::ErrorKind::NotFound {
-            GitError::git_missing()
+            AppError::git_missing()
         } else {
-            GitError::io(error)
+            AppError::io(error)
         }
     };
 
@@ -126,7 +126,7 @@ where
         // Un EPIPE (Git terminó antes de leer todo) se resuelve con el código de salida.
         let _ = stdin.write_all(bytes);
     }
-    let output = child.wait_with_output().map_err(GitError::io)?;
+    let output = child.wait_with_output().map_err(AppError::io)?;
 
     if output.status.success() {
         Ok(GitOutput {
@@ -140,7 +140,7 @@ where
         } else {
             stderr
         };
-        Err(GitError::command(message))
+        Err(AppError::command(message))
     }
 }
 
@@ -201,13 +201,13 @@ pub fn run_git_streaming<I, S>(
     args: I,
     operation: &Operation,
     mut on_line: impl FnMut(&str),
-) -> Result<StreamOutput, GitError>
+) -> Result<StreamOutput, AppError>
 where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
     if !dir.is_dir() {
-        return Err(GitError::not_found(dir));
+        return Err(AppError::not_found(dir));
     }
 
     let mut command = git_command();
@@ -226,9 +226,9 @@ where
 
     let mut child = command.spawn().map_err(|error| {
         if error.kind() == std::io::ErrorKind::NotFound {
-            GitError::git_missing()
+            AppError::git_missing()
         } else {
-            GitError::io(error)
+            AppError::io(error)
         }
     })?;
     let mut stderr = child.stderr.take().expect("stderr es piped");
@@ -285,7 +285,7 @@ where
     let status = {
         let mut slot = operation.child.lock().expect("operación envenenada");
         let mut child = slot.take().expect("proceso hijo registrado");
-        child.wait().map_err(GitError::io)?
+        child.wait().map_err(AppError::io)?
     };
 
     Ok(StreamOutput {
@@ -323,7 +323,7 @@ mod tests {
     #[test]
     fn check_git_rejects_fake_path() {
         let err = check_git(Some(Path::new("/no/existe/git"))).unwrap_err();
-        assert_eq!(err.kind, super::super::error::GitErrorKind::GitMissing);
+        assert_eq!(err.kind, super::super::error::AppErrorKind::Git);
     }
 
     #[test]
@@ -341,13 +341,13 @@ mod tests {
     #[test]
     fn rejects_missing_directory() {
         let err = run_git(Path::new("/no/existe/gitleviatan"), ["status"]).unwrap_err();
-        assert_eq!(err.kind, super::super::error::GitErrorKind::NotFound);
+        assert_eq!(err.kind, super::super::error::AppErrorKind::NotFound);
     }
 
     #[test]
     fn reports_git_failure() {
         let err = run_git(&std::env::temp_dir(), ["no-such-subcommand"]).unwrap_err();
-        assert_eq!(err.kind, super::super::error::GitErrorKind::Command);
+        assert_eq!(err.kind, super::super::error::AppErrorKind::Git);
     }
 
     #[test]

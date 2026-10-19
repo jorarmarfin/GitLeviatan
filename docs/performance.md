@@ -1,6 +1,6 @@
 # Rendimiento del historial y del grafo
 
-Línea base de la SPEC 03. **No son umbrales**: los umbrales se fijan en la SPEC 08 a partir de estos números.
+Línea base de la SPEC 03 y umbrales de la SPEC 08 (ver [Umbrales](#umbrales-spec-08)).
 
 ## Cómo se midió
 
@@ -49,3 +49,28 @@ El montaje del primer caso incluye el calentamiento de jsdom. El layout completo
 
 - El cuello de botella medido está en Git (`--topo-order`, ~0,5 s a 110 000 commits), no en la UI.
 - Si 0,5 s resulta excesivo, la opción es cargar sin `--topo-order` o con un cursor por oid (ver riesgo de `--skip` en la SPEC 02).
+
+## Umbrales (SPEC 08)
+
+Viven en `tests/perf/thresholds.json` con el formato `{ "<métrica>": { "maxMs": number } }` y los comprueban dos
+pruebas que corren siempre, también en CI:
+
+- Rust: `cargo test perf_stays_within_thresholds` (`src-tauri/src/git/operations.rs`). Genera con `git fast-import`
+  un repositorio de ~11 000 commits y mide `list_commits` (página de 500) y `get_status`.
+- Frontend: `pnpm vitest run src/features/graph/perf.test.tsx`. Mide layout, montaje y scroll de un historial
+  sintético de 110 000 commits.
+
+Ambas toman el **mejor de 3 intentos** para que el ruido de una máquina compartida no dé falsos positivos.
+
+| Métrica                         | Medido (build debug, Ubuntu) | Umbral |
+| ------------------------------- | ---------------------------: | -----: |
+| `backend_list_commits_page_11k` |                        47 ms | 500 ms |
+| `backend_get_status_11k`        |                       1,3 ms | 100 ms |
+| `frontend_layout_110k`          |                     50–67 ms | 600 ms |
+| `frontend_mount_110k`           |                     28–34 ms | 300 ms |
+| `frontend_scroll_event`         |                3,6 ms/evento |  40 ms |
+
+Los umbrales dejan ~10× de margen sobre la medición: detectan una regresión de orden de magnitud (p. ej. volver a una
+carga O(n²)), no variaciones del 20 %. Si una mejora real baja los tiempos de forma sostenida, conviene apretarlos.
+Los 110 000 commits del backend (≈ 0,5 s) siguen siendo una medición manual (`perf_list_commits`) por el coste de
+generar el repositorio en cada ejecución.

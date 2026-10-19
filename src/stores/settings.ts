@@ -1,8 +1,8 @@
 import { create } from "zustand";
 
-import { api, errorDetail, errorMessage } from "@/lib/api";
+import { api, toAppError } from "@/lib/api";
 import { clearLegacyTheme, readLegacyTheme } from "@/lib/theme";
-import type { GitInfo, OperationError, Settings } from "@/types/git";
+import type { AppError, GitInfo, Settings } from "@/types/git";
 
 export const DEFAULT_SETTINGS: Settings = {
   version: 1,
@@ -11,7 +11,7 @@ export const DEFAULT_SETTINGS: Settings = {
   maxRecentRepositories: 20,
 };
 
-type UpdateResult = { ok: true } | { ok: false; error: OperationError };
+type UpdateResult = { ok: true } | { ok: false; error: AppError };
 
 type SettingsState = {
   settings: Settings;
@@ -19,7 +19,7 @@ type SettingsState = {
   loaded: boolean;
   /** `null` hasta saber si Git está disponible. */
   git: GitInfo | null;
-  loadError: string | null;
+  loadError: AppError | null;
   load: () => Promise<void>;
   update: (patch: Partial<Settings>) => Promise<UpdateResult>;
   detectGit: () => Promise<void>;
@@ -35,7 +35,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     try {
       set({ settings: await api.getSettings(), loaded: true, loadError: null });
     } catch (error) {
-      set({ loaded: true, loadError: errorMessage(error) });
+      set({ loaded: true, loadError: toAppError(error) });
     }
 
     // Migración única del tema desde localStorage: se borra la clave solo si se guardó.
@@ -53,7 +53,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       set({ settings: saved });
       return { ok: true };
     } catch (error) {
-      return { ok: false, error: { message: errorMessage(error), detail: errorDetail(error) } };
+      return { ok: false, error: toAppError(error) };
     }
   },
 
@@ -61,7 +61,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     try {
       set({ git: await api.detectGit() });
     } catch (error) {
-      set({ git: { available: false, version: null, message: errorMessage(error) } });
+      set({ git: { available: false, version: null, message: toAppError(error).message } });
     }
   },
 }));

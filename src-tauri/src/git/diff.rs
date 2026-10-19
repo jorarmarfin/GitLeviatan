@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use super::error::{GitError, GitErrorKind};
+use super::error::{AppError, AppErrorKind};
 use super::process::run_git;
 use super::types::{DiffScope, FileDiff};
 use super::write::validate_relative_path;
@@ -28,8 +28,8 @@ enum Side {
     Present { size: u64, bytes: Option<Vec<u8>> },
 }
 
-fn is_missing(error: &GitError) -> bool {
-    error.kind == GitErrorKind::Command
+fn is_missing(error: &AppError) -> bool {
+    error.kind == AppErrorKind::Git
         && error
             .detail
             .as_deref()
@@ -37,12 +37,12 @@ fn is_missing(error: &GitError) -> bool {
 }
 
 /// Lee un blob de Git (`HEAD:ruta` o `:ruta` para el índice). `None` si no existe.
-fn read_blob(repo: &Path, spec: &str) -> Result<Side, GitError> {
+fn read_blob(repo: &Path, spec: &str) -> Result<Side, AppError> {
     let size = match run_git(repo, ["cat-file", "-s", spec]) {
         Ok(out) => String::from_utf8_lossy(&out.stdout)
             .trim()
             .parse::<u64>()
-            .map_err(|_| GitError::internal("Tamaño de objeto ilegible."))?,
+            .map_err(|_| AppError::internal("Tamaño de objeto ilegible."))?,
         Err(error) if is_missing(&error) => return Ok(Side::Missing),
         Err(error) => return Err(error),
     };
@@ -58,15 +58,15 @@ fn read_blob(repo: &Path, spec: &str) -> Result<Side, GitError> {
 
 /// Lee el archivo del working tree. Un enlace simbólico se representa por su destino
 /// (como hace Git) y nunca se sigue, para no leer fuera del repositorio.
-fn read_worktree(repo: &Path, path: &str) -> Result<Side, GitError> {
+fn read_worktree(repo: &Path, path: &str) -> Result<Side, AppError> {
     let full = repo.join(path);
     let metadata = match std::fs::symlink_metadata(&full) {
         Ok(m) => m,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Side::Missing),
-        Err(e) => return Err(GitError::io(e)),
+        Err(e) => return Err(AppError::io(e)),
     };
     if metadata.file_type().is_symlink() {
-        let target = std::fs::read_link(&full).map_err(GitError::io)?;
+        let target = std::fs::read_link(&full).map_err(AppError::io)?;
         let bytes = target.to_string_lossy().into_owned().into_bytes();
         return Ok(Side::Present {
             size: bytes.len() as u64,
@@ -86,7 +86,7 @@ fn read_worktree(repo: &Path, path: &str) -> Result<Side, GitError> {
             bytes: None,
         });
     }
-    let bytes = std::fs::read(&full).map_err(GitError::io)?;
+    let bytes = std::fs::read(&full).map_err(AppError::io)?;
     Ok(Side::Present {
         size: bytes.len() as u64,
         bytes: Some(bytes),
@@ -97,7 +97,7 @@ fn looks_binary(bytes: &[u8]) -> bool {
     bytes.iter().take(BINARY_SNIFF_BYTES).any(|b| *b == 0)
 }
 
-pub fn get_diff(repo: &Path, path: &str, scope: DiffScope) -> Result<FileDiff, GitError> {
+pub fn get_diff(repo: &Path, path: &str, scope: DiffScope) -> Result<FileDiff, AppError> {
     validate_relative_path(path)?;
 
     let (original, modified) = match scope {
@@ -259,7 +259,7 @@ mod tests {
                 get_diff(repo.path(), bad, DiffScope::Unstaged)
                     .unwrap_err()
                     .kind,
-                GitErrorKind::InvalidInput,
+                AppErrorKind::Validation,
                 "{bad}"
             );
         }

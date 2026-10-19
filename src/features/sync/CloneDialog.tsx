@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { api } from "@/lib/api";
 import { useRepositoryStore } from "@/stores/repository";
-import type { SyncFailure } from "@/types/git";
+import type { AppError } from "@/types/git";
 
 import { cloneDestination } from "./cloneDestination";
 import { SyncProgressBar } from "./SyncProgressBar";
@@ -18,7 +18,7 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
   const { running, progress, canCancel, execute, cancel } = useSyncOperation();
   const [url, setUrl] = useState("");
   const [parent, setParent] = useState<string | null>(null);
-  const [failure, setFailure] = useState<SyncFailure | null>(null);
+  const [failure, setFailure] = useState<AppError | null>(null);
 
   async function pickFolder() {
     const selected = await open({ directory: true, multiple: false });
@@ -87,7 +87,7 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
         </p>
 
         {running && <SyncProgressBar progress={progress} />}
-        {failure && <ErrorNotice error={failure} />}
+        {failure && <ErrorNotice error={failure} title="No se pudo clonar el repositorio" />}
 
         <div className="flex justify-end gap-2">
           {running ? (

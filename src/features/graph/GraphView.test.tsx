@@ -70,6 +70,22 @@ describe("GraphView", () => {
     expect(screen.getByRole("option", { selected: true })).toHaveTextContent("Commit 20");
   });
 
+  it("RePág y AvPág mueven la selección por páginas", async () => {
+    render(<Harness commits={makeCommits(200)} />);
+    await userEvent.click(screen.getByRole("listbox"));
+    await userEvent.keyboard("{Home}{PageDown}");
+    const afterDown = screen.getByTestId("selected").textContent ?? "";
+    expect(Number(afterDown.replace("oid", ""))).toBeLessThan(200 - 5);
+    await userEvent.keyboard("{PageUp}");
+    expect(screen.getByTestId("selected")).toHaveTextContent("oid200");
+  });
+
+  it("es alcanzable con Tab y expone el historial como lista con nombre", async () => {
+    render(<Harness commits={makeCommits(5)} />);
+    await userEvent.tab();
+    expect(screen.getByRole("listbox", { name: "Historial de commits" })).toHaveFocus();
+  });
+
   it("al hacer clic en una fila la selecciona", async () => {
     const spy = vi.fn();
     render(<Harness commits={makeCommits(5)} onSelectSpy={spy} />);

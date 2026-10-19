@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use super::error::GitError;
+use super::error::AppError;
 use super::process::run_git;
 use super::types::RemoteInfo;
 
@@ -46,7 +46,7 @@ pub fn sanitize_text(text: &str) -> String {
     out
 }
 
-pub fn list_remotes(repo: &Path) -> Result<Vec<RemoteInfo>, GitError> {
+pub fn list_remotes(repo: &Path) -> Result<Vec<RemoteInfo>, AppError> {
     let out = run_git(repo, ["remote", "-v"])?;
     Ok(parse_remotes(&String::from_utf8_lossy(&out.stdout)))
 }

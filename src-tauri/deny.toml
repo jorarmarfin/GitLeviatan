@@ -1,0 +1,48 @@
+# Política de dependencias de Rust (cargo-deny). Ver docs/decisions/0003-auditoria-dependencias.md.
+# Uso: cargo deny --manifest-path src-tauri/Cargo.toml check
+
+[graph]
+all-features = true
+
+[advisories]
+version = 2
+# Vulnerabilidades: siempre error. «Sin mantenimiento» y «unsound» solo fallan si afectan a una
+# dependencia directa del proyecto: las transitivas de Tauri en Linux (GTK3) solo avisan.
+unmaintained = "workspace"
+unsound = "workspace"
+# Excepciones: solo con un RUSTSEC concreto, el motivo y un enlace en la ADR 0003.
+ignore = []
+
+[licenses]
+version = 2
+# Compatibles con GPL-3.0-or-later (permisivas y copyleft débil).
+allow = [
+  "MIT",
+  "MIT-0",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "MPL-2.0",
+  "Unicode-3.0",
+  "Unicode-DFS-2016",
+  "Zlib",
+  "CC0-1.0",
+  "0BSD",
+  "BSL-1.0",
+  "OpenSSL",
+  "GPL-3.0-or-later",
+  "Unlicense",
+]
+confidence-threshold = 0.8
+unused-allowed-license = "allow"
+
+[bans]
+multiple-versions = "allow"
+wildcards = "allow"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

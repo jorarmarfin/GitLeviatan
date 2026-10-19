@@ -151,7 +151,7 @@ describe("SyncBar", () => {
 
   it("explica un push rechazado y ofrece el detalle técnico", async () => {
     vi.mocked(api.push).mockRejectedValue({
-      kind: "nonFastForward",
+      kind: "git",
       message: "El remoto tiene cambios que no tienes en local.",
       detail: " ! [rejected] main -> main (non-fast-forward)",
     });

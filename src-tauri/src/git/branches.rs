@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use super::error::GitError;
+use super::error::AppError;
 use super::operations::is_valid_oid;
 use super::process::run_git;
 use super::types::{BranchInfo, BranchKind, DeleteBranchOutcome, DeleteReason};
@@ -29,7 +29,7 @@ fn short_ref(full: &str) -> &str {
         .unwrap_or(full)
 }
 
-pub fn list_branches(repo: &Path) -> Result<Vec<BranchInfo>, GitError> {
+pub fn list_branches(repo: &Path) -> Result<Vec<BranchInfo>, AppError> {
     let out = run_git(
         repo,
         ["for-each-ref", BRANCH_FORMAT, "refs/heads", "refs/remotes"],
@@ -44,7 +44,7 @@ pub fn list_branches(repo: &Path) -> Result<Vec<BranchInfo>, GitError> {
         }
         let fields: Vec<&str> = record.split('\0').collect();
         if fields.len() != 5 {
-            return Err(GitError::internal(format!(
+            return Err(AppError::internal(format!(
                 "Salida de Git inesperada (rama): {record:?}"
             )));
         }
@@ -72,13 +72,13 @@ pub fn list_branches(repo: &Path) -> Result<Vec<BranchInfo>, GitError> {
     Ok(branches)
 }
 
-fn invalid_name(name: &str) -> GitError {
-    GitError::invalid_input(format!("«{name}» no es un nombre de rama válido para Git."))
+fn invalid_name(name: &str) -> AppError {
+    AppError::invalid_input(format!("«{name}» no es un nombre de rama válido para Git."))
 }
 
 /// Valida con la propia definición de Git. Se descartan antes los nombres que
 /// Git interpretaría como opción (`-x`) o como sintaxis especial (`@{-1}`).
-fn validate_branch_name(repo: &Path, name: &str) -> Result<(), GitError> {
+fn validate_branch_name(repo: &Path, name: &str) -> Result<(), AppError> {
     if name.is_empty() || name.starts_with('-') || name.contains("@{") {
         return Err(invalid_name(name));
     }
@@ -97,7 +97,7 @@ fn current_branch(repo: &Path) -> Option<String> {
         .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
-fn require_plain_name(name: &str) -> Result<(), GitError> {
+fn require_plain_name(name: &str) -> Result<(), AppError> {
     if name.is_empty() || name.starts_with('-') {
         return Err(invalid_name(name));
     }
@@ -105,12 +105,12 @@ fn require_plain_name(name: &str) -> Result<(), GitError> {
 }
 
 /// Crea una rama local sin cambiarse a ella. `start_point` es un oid o `None` (HEAD).
-pub fn create_branch(repo: &Path, name: &str, start_point: Option<&str>) -> Result<(), GitError> {
+pub fn create_branch(repo: &Path, name: &str, start_point: Option<&str>) -> Result<(), AppError> {
     validate_branch_name(repo, name)?;
     let mut args = vec!["branch", "--", name];
     if let Some(start) = start_point {
         if !is_valid_oid(start) {
-            return Err(GitError::invalid_input(format!(
+            return Err(AppError::invalid_input(format!(
                 "Punto de partida inválido: {start}"
             )));
         }
@@ -120,7 +120,7 @@ pub fn create_branch(repo: &Path, name: &str, start_point: Option<&str>) -> Resu
 }
 
 /// Cambia a una rama local, o a una remota creando la local con seguimiento.
-pub fn checkout_branch(repo: &Path, branch: &str) -> Result<(), GitError> {
+pub fn checkout_branch(repo: &Path, branch: &str) -> Result<(), AppError> {
     require_plain_name(branch)?;
 
     let result = if ref_exists(repo, &format!("refs/heads/{branch}")) {
@@ -132,13 +132,13 @@ pub fn checkout_branch(repo: &Path, branch: &str) -> Result<(), GitError> {
             .filter(|rest| !rest.is_empty())
             .ok_or_else(|| invalid_name(branch))?;
         if ref_exists(repo, &format!("refs/heads/{local}")) {
-            return Err(GitError::invalid_input(format!(
+            return Err(AppError::invalid_input(format!(
                 "Ya existe una rama local «{local}». Cámbiate a ella en lugar de a «{branch}»."
             )));
         }
         run_git(repo, ["switch", "-c", local, "--track", branch])
     } else {
-        return Err(GitError::invalid_input(format!(
+        return Err(AppError::invalid_input(format!(
             "La rama «{branch}» no existe."
         )));
     };
@@ -149,7 +149,7 @@ pub fn checkout_branch(repo: &Path, branch: &str) -> Result<(), GitError> {
             .as_deref()
             .is_some_and(|d| d.contains("would be overwritten") || d.contains("local changes"));
         if blocked {
-            GitError {
+            AppError {
                 message: "Tienes cambios locales que se perderían al cambiar de rama. \
                           Confírmalos o descártalos antes de continuar."
                     .into(),
@@ -166,15 +166,15 @@ pub fn delete_branch(
     repo: &Path,
     branch: &str,
     force: bool,
-) -> Result<DeleteBranchOutcome, GitError> {
+) -> Result<DeleteBranchOutcome, AppError> {
     require_plain_name(branch)?;
     if !ref_exists(repo, &format!("refs/heads/{branch}")) {
-        return Err(GitError::invalid_input(format!(
+        return Err(AppError::invalid_input(format!(
             "No existe la rama local «{branch}»."
         )));
     }
     if current_branch(repo).as_deref() == Some(branch) {
-        return Err(GitError::invalid_input(
+        return Err(AppError::invalid_input(
             "No se puede eliminar la rama actual. Cámbiate a otra antes.",
         ));
     }
@@ -200,7 +200,7 @@ pub fn delete_branch(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::git::error::GitErrorKind;
+    use crate::git::error::AppErrorKind;
     use crate::git::testutil::{commit_file, git, init_bare, init_repo};
 
     fn names(branches: &[BranchInfo], kind: BranchKind) -> Vec<String> {
@@ -359,7 +359,7 @@ mod tests {
             "a\nb",
         ] {
             let err = create_branch(repo.path(), bad, None).unwrap_err();
-            assert_eq!(err.kind, GitErrorKind::InvalidInput, "{bad:?}");
+            assert_eq!(err.kind, AppErrorKind::Validation, "{bad:?}");
         }
         assert_eq!(list_branches(repo.path()).unwrap().len(), 1);
     }
@@ -373,7 +373,7 @@ mod tests {
             create_branch(repo.path(), "otra", Some("--output=/tmp/x"))
                 .unwrap_err()
                 .kind,
-            GitErrorKind::InvalidInput
+            AppErrorKind::Validation
         );
         assert_eq!(list_branches(repo.path()).unwrap().len(), 1);
     }
@@ -403,7 +403,7 @@ mod tests {
         std::fs::write(repo.path().join("a.txt"), "cambio local sin confirmar\n").unwrap();
 
         let err = checkout_branch(repo.path(), "otra").unwrap_err();
-        assert_eq!(err.kind, GitErrorKind::Command);
+        assert_eq!(err.kind, AppErrorKind::Git);
         assert!(err.message.contains("cambios locales"));
         assert!(err.detail.unwrap().contains("would be overwritten"));
         let current = list_branches(repo.path())
@@ -437,7 +437,7 @@ mod tests {
     fn remote_checkout_refuses_when_the_local_branch_already_exists() {
         let (repo, _remote) = repo_with_remote();
         let err = checkout_branch(repo.path(), "origin/main").unwrap_err();
-        assert_eq!(err.kind, GitErrorKind::InvalidInput);
+        assert_eq!(err.kind, AppErrorKind::Validation);
         assert!(err.message.contains("Ya existe"));
     }
 
@@ -498,7 +498,7 @@ mod tests {
         let (repo, _remote) = repo_with_remote();
         for target in ["main", "no-existe", "origin/main", "-D"] {
             let err = delete_branch(repo.path(), target, true).unwrap_err();
-            assert_eq!(err.kind, GitErrorKind::InvalidInput, "{target}");
+            assert_eq!(err.kind, AppErrorKind::Validation, "{target}");
         }
         assert!(
             names(&list_branches(repo.path()).unwrap(), BranchKind::Local)

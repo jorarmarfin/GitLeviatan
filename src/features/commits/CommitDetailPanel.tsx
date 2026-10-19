@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 
 import { parseRefs } from "@/features/graph/refs";
 import type { CommitDetail } from "@/features/graph/types";
-import { api, errorMessage } from "@/lib/api";
-import type { RepositoryRef } from "@/types/git";
+import { ErrorNotice } from "@/components/ErrorNotice";
+import { api, toAppError } from "@/lib/api";
+import type { AppError, RepositoryRef } from "@/types/git";
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "long", timeStyle: "short" });
 
@@ -11,7 +12,7 @@ type Props = { repository: RepositoryRef; oid: string };
 
 type Load =
   | { phase: "loading" }
-  | { phase: "error"; message: string }
+  | { phase: "error"; error: AppError }
   | { phase: "ready"; detail: CommitDetail };
 
 // Se remonta (prop `key`) al cambiar de commit: el estado inicial ya es "loading".
@@ -23,7 +24,7 @@ export function CommitDetailPanel({ repository, oid }: Props) {
     api
       .getCommit(repository.id, oid)
       .then((detail) => current && setLoad({ phase: "ready", detail }))
-      .catch((e: unknown) => current && setLoad({ phase: "error", message: errorMessage(e) }));
+      .catch((e: unknown) => current && setLoad({ phase: "error", error: toAppError(e) }));
     return () => {
       current = false;
     };
@@ -32,9 +33,9 @@ export function CommitDetailPanel({ repository, oid }: Props) {
   if (load.phase === "loading") return <p className="p-3 text-sm">Cargando commit…</p>;
   if (load.phase === "error") {
     return (
-      <p role="alert" className="p-3 text-sm text-destructive">
-        {load.message}
-      </p>
+      <div className="p-3">
+        <ErrorNotice error={load.error} title="No se pudo cargar el commit" />
+      </div>
     );
   }
 

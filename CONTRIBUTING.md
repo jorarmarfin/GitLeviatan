@@ -13,8 +13,9 @@
 ```bash
 pnpm lint && pnpm format:check && pnpm test
 cargo fmt --manifest-path src-tauri/Cargo.toml --check
-cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 cargo test --manifest-path src-tauri/Cargo.toml
+pnpm licenses:check && pnpm audit:js                  # dependencias (CI además ejecuta cargo audit/deny)
 ```
 
 ## Reglas

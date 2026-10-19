@@ -4,7 +4,7 @@ import { ArrowDown, ArrowUp, RefreshCw, WifiOff, X } from "lucide-react";
 import { ErrorNotice } from "@/components/ErrorNotice";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
-import type { RepositoryRef, SyncFailure } from "@/types/git";
+import type { AppError, RepositoryRef } from "@/types/git";
 
 import { SyncProgressBar } from "./SyncProgressBar";
 import { useSyncOperation } from "./useSyncOperation";
@@ -20,10 +20,16 @@ type Props = {
 
 type Kind = "fetch" | "pull" | "push";
 
+const FAILED: Record<Kind, string> = {
+  fetch: "No se pudo hacer fetch",
+  pull: "No se pudo hacer pull",
+  push: "No se pudo hacer push",
+};
+
 export function SyncBar({ repository, externalVersion, onChanged }: Props) {
   const target = useSyncTarget(repository, externalVersion);
   const { running, progress, canCancel, execute, cancel } = useSyncOperation();
-  const [failure, setFailure] = useState<SyncFailure | null>(null);
+  const [failure, setFailure] = useState<{ error: AppError; title: string } | null>(null);
   const [offline, setOffline] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -47,7 +53,7 @@ export function SyncBar({ repository, externalVersion, onChanged }: Props) {
     if (result.failure.kind === "cancelled") setNotice("Operación cancelada.");
     else {
       setOffline(result.failure.kind === "network");
-      setFailure(result.failure);
+      setFailure({ error: result.failure, title: FAILED[kind] });
     }
   }
 
@@ -118,7 +124,7 @@ export function SyncBar({ repository, externalVersion, onChanged }: Props) {
       )}
       {failure && !running && (
         <div className="basis-full">
-          <ErrorNotice error={failure} />
+          <ErrorNotice error={failure.error} title={failure.title} />
         </div>
       )}
     </div>

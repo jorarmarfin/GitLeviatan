@@ -39,7 +39,7 @@ export function DeleteBranchDialog({ branch, stage, busy, error, onConfirm, onCl
           </p>
         )}
 
-        {error && <ErrorNotice error={error} />}
+        {error && <ErrorNotice error={error} title="No se pudo eliminar la rama" />}
 
         <div className="flex justify-end gap-2">
           <Button variant="outline" size="sm" onClick={onClose}>
