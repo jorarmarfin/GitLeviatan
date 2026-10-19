@@ -1,6 +1,6 @@
 # SPEC 06 — Remotos, clone, fetch, pull y push
 
-> **Estado:** Borrador
+> **Estado:** Approved
 > **Depende de:** SPEC 02, SPEC 05
 > **Fecha:** 2026-10-19
 > **Objetivo:** Mostrar los remotos y permitir clonar, hacer fetch, pull y push con progreso, cancelación y mensajes de error comprensibles, delegando la autenticación en SSH y en los credential helpers de Git.
