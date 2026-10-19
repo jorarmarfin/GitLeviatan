@@ -7,6 +7,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(git::repository::Repositories::default())
+        .manage(git::sync::Operations::default())
         .invoke_handler(tauri::generate_handler![
             commands::ping,
             commands::open_repository,
@@ -22,6 +23,12 @@ pub fn run() {
             commands::create_branch,
             commands::checkout_branch,
             commands::delete_branch,
+            commands::list_remotes,
+            commands::fetch,
+            commands::pull,
+            commands::push,
+            commands::clone_repository,
+            commands::cancel_operation,
         ])
         .run(tauri::generate_context!())
         .expect("error al ejecutar la aplicación Tauri");

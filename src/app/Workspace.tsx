@@ -5,6 +5,8 @@ import { BranchesPanel } from "@/features/branches/BranchesPanel";
 import { CommitDetailPanel } from "@/features/commits/CommitDetailPanel";
 import { GraphPanel } from "@/features/graph/GraphPanel";
 import { ChangesPanel } from "@/features/status/ChangesPanel";
+import { RemotesPanel } from "@/features/sync/RemotesPanel";
+import { SyncBar } from "@/features/sync/SyncBar";
 import type { RepositoryRef } from "@/types/git";
 
 // Se remonta (prop `key`) al cambiar de repositorio: la selección se reinicia.
@@ -28,8 +30,10 @@ export function Workspace({ repository }: { repository: RepositoryRef }) {
           externalVersion={version}
           onChanged={refresh}
         />
+        <RemotesPanel repository={repository} externalVersion={version} />
       </Sidebar>
       <div className="flex min-h-0 flex-col">
+        <SyncBar repository={repository} externalVersion={version} onChanged={refresh} />
         <div className="grid min-h-0 flex-1 grid-cols-[1fr_22rem]">
           <main className="min-h-0 overflow-hidden">
             <GraphPanel
