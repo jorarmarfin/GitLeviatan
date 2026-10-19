@@ -1,6 +1,6 @@
 # SPEC 11 — Cerrar el proyecto, quitarlo de recientes y mostrar la versión
 
-> **Estado:** Approved
+> **Estado:** Implemented
 > **Depende de:** SPEC 02, SPEC 07, SPEC 08
 > **Fecha:** 2026-10-19
 > **Objetivo:** Permitir cerrar el repositorio abierto para volver a la pantalla inicial y quitar un proyecto concreto de la lista de recientes, sin tener que borrar toda la lista, y mostrar la versión de la app en el pie en lugar del `ping: pong` heredado de la SPEC 01.
@@ -17,6 +17,7 @@ Además, el pie de la ventana muestra `ping: pong`, un resto de la SPEC 01 que s
 
 - Comando `remove_recent_repository(path)`: quita una entrada de `recent.json`.
 - Botón **×** junto a cada proyecto de Recientes, con el nombre accesible «Quitar _nombre_ de recientes». Solo borra la entrada de la lista: no toca el repositorio ni los archivos del disco.
+- **Modal de confirmación** al pulsar la **×**: «¿Quitar _nombre_ de recientes?», con el aviso de que solo se quita de la lista y el repositorio y los archivos no se tocan. Botones **Cancelar** (con el foco inicial) y **Quitar**. Es un modal propio de la app (el componente `Modal`), nunca un `confirm()`/`alert()` nativo del navegador.
 - Botón **Cerrar repositorio** en la cabecera, junto al nombre del proyecto abierto, que vuelve a la pantalla inicial.
 - El botón de cerrar se deshabilita mientras haya un fetch, pull o push en curso, con una explicación en su título.
 - Quitar de recientes el proyecto que está abierto lo mantiene abierto; la entrada reaparece si se vuelve a abrir.
@@ -33,6 +34,7 @@ Además, el pie de la ventana muestra `ping: pong`, un resto de la SPEC 01 que s
 - Fijar, ordenar o agrupar proyectos.
 - Borrar un repositorio del disco.
 - Un atajo de teclado global dedicado.
+- «No volver a preguntar» en el modal de confirmación y deshacer tras quitar.
 - Búsqueda o plegado en la barra lateral de ramas.
 - Una ventana «Acerca de» (licencia, enlaces, créditos) y la comprobación de actualizaciones.
 - Mostrar la versión de Git en el pie (ya aparece en Preferencias).
@@ -58,11 +60,15 @@ Convenciones:
 4. Añadir `closeRepository()` al store y el botón **Cerrar repositorio** en la cabecera. Registrar en el store si hay una operación de red en curso desde el panel de sincronización. Pruebas: vuelve a la pantalla inicial, reinicia la selección, no aparece sin repositorio y se deshabilita durante un fetch.
 5. Cubrir los casos límite: quitar de recientes el proyecto abierto, cerrar y reabrir desde Recientes, y quitar el último proyecto de la lista (mensaje de lista vacía).
 6. Mostrar la versión: comando `get_app_version`, texto del pie y eliminación de `ping`. Pruebas: el pie muestra la versión, no aparece `ping`, el fallo no rompe el pie y las tres versiones coinciden.
-7. Actualizar `docs/shortcuts.md` y `CHANGELOG.md`.
+7. Añadir el modal de confirmación al quitar un proyecto de recientes, reutilizando `Modal`. Pruebas: la **×** abre el modal sin quitar nada, **Cancelar**, `Esc` y clic fuera no quitan, **Quitar** sí, el foco inicial está en **Cancelar**, se opera con teclado y no se usa ningún diálogo nativo. Actualizar las pruebas de la lista y del flujo completo.
+8. Actualizar `docs/shortcuts.md` y `CHANGELOG.md`.
 
 ## Criterios de aceptación
 
 - [ ] Cada proyecto de Recientes tiene un botón para quitarlo, y quitarlo no borra nada del disco.
+- [ ] Pulsar la **×** abre un modal de la app y no quita nada hasta confirmar; **Cancelar**, `Esc` y el clic fuera lo cierran sin quitar.
+- [ ] El foco inicial del modal está en **Cancelar** y el modal se opera solo con teclado.
+- [ ] No se usa ningún diálogo nativo (`confirm`, `alert`, `prompt`) en la aplicación (prueba automática).
 - [ ] El cambio persiste tras reiniciar la app.
 - [ ] Quitar un proyecto no afecta a los demás ni a su orden.
 - [ ] Quitar el proyecto abierto no lo cierra.
@@ -79,7 +85,10 @@ Convenciones:
 ## Decisiones
 
 - **Sí:** quitar una entrada solo de la lista. Es lo que pide el uso real y no es destructivo.
-- **No:** pedir confirmación. Ninguna de las dos acciones borra datos: el proyecto se vuelve a abrir con **Abrir repositorio**.
+- **Sí:** modal de confirmación al quitar un proyecto de recientes. Aunque no borra datos, evita quitarlo por un clic accidental junto a su nombre. Se reutiliza el componente `Modal` (accesible, con foco atrapado y `Esc`) y el foco inicial va a **Cancelar**, la opción segura.
+- **No:** un `window.confirm()` nativo. No se puede estilar, no respeta el tema, no se prueba con las herramientas del proyecto y en Tauri se ve distinto en cada sistema.
+- **No:** confirmación al **cerrar el repositorio**. Cerrar solo vuelve a la pantalla inicial y el proyecto sigue en Recientes.
+- **No:** «No volver a preguntar» ni deshacer por ahora. Exigiría una preferencia nueva; entra en otra spec si el modal resulta pesado.
 - **Sí:** cerrar es estado del frontend, sin comando de backend. El registro de repositorios es pequeño y reutiliza el identificador al reabrir; desregistrar no aporta nada.
 - **Sí:** deshabilitar **Cerrar repositorio** durante una operación de red. Cerrarlo desmontaría el panel de sincronización y el usuario perdería la barra de progreso y el botón Cancelar de una operación que sigue en marcha.
 - **No:** cancelar automáticamente la operación al cerrar. Mejor que el usuario decida pulsando Cancelar.
@@ -94,7 +103,8 @@ Convenciones:
 
 | Riesgo | Mitigación |
 | ------ | ---------- |
-| Quitar un proyecto por error al hacer clic cerca de su nombre | La **×** es un botón aparte, a la derecha, con un área de clic propia; reabrir el proyecto con **Abrir repositorio** devuelve la entrada. |
+| Quitar un proyecto por error al hacer clic cerca de su nombre | La **×** es un botón aparte con un área de clic propia y quitar pide confirmación en un modal; reabrir el proyecto con **Abrir repositorio** devuelve la entrada. |
+| Un clic más al limpiar muchos proyectos | Aceptado a cambio de evitar errores; si molesta, una spec futura añade «No volver a preguntar». |
 | El botón × oculto hasta pasar el ratón no es descubrible con teclado | Visible también con `:focus-visible` y `:focus-within`; prueba de que se alcanza con Tab. |
 | Estado de «operación en curso» desincronizado si el panel falla | El panel lo limpia siempre al terminar (con éxito, error o cancelación) y al desmontarse. |
 | Versiones desincronizadas entre `package.json`, `Cargo.toml` y `tauri.conf.json` tras un release | Prueba automática que falla si no coinciden. |
