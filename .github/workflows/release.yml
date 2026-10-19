@@ -134,9 +134,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cd paquetes
-          sha256sum * > ../SHA256SUMS.txt
-          cd ..
+          # upload-artifact conserva subcarpetas (deb/, appimage/, nsis/…): se aplanan.
+          find paquetes -mindepth 2 -type f -exec mv {} paquetes/ \;
+          find paquetes -mindepth 1 -type d -empty -delete
+          ls -lh paquetes
+          (cd paquetes && sha256sum -- * > ../SHA256SUMS.txt)
+          cat SHA256SUMS.txt
           gh release create "$GITHUB_REF_NAME" paquetes/* SHA256SUMS.txt \
             --title "GitLeviatán $GITHUB_REF_NAME" \
             --notes-file release-notes.md
