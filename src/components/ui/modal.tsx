@@ -54,7 +54,7 @@ export function Modal({ title, onClose, children }: Props) {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/50 p-4"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}

@@ -29,11 +29,13 @@ La lista tiene el foco con `Alt+2` (o con `Tab`). La selección sigue al foco y 
 
 ## Cambios y commit
 
-| Atajo                    | Acción                                                                       |
-| ------------------------ | ---------------------------------------------------------------------------- |
-| `Tab`                    | Recorre cada archivo (ver diff) y su botón preparar/quitar.                  |
-| `Enter` / `Espacio`      | Sobre un archivo: muestra su diff. Sobre `+`/`−`: prepara o quita de staged. |
-| `Ctrl+Enter` (`⌘+Enter`) | En el mensaje de commit: crea el commit.                                     |
+| Atajo                     | Acción                                                                            |
+| ------------------------- | --------------------------------------------------------------------------------- |
+| `Tab`                     | Recorre cada archivo (ver diff) y su botón preparar/quitar.                       |
+| `Enter` / `Espacio`       | Sobre un archivo: muestra su diff. Sobre `+`/`−`: prepara o quita de staged.      |
+| `Ctrl+Enter` (`⌘+Enter`)  | En el mensaje de commit: crea el commit.                                          |
+| `Tab` → **Preparar todo** | Al inicio del panel: prepara todo (`git add -A`). `Enter` o `Espacio` lo activan. |
+| `Tab` → **Quitar todo**   | En la cabecera de Staged: quita todo de staged sin tocar tus archivos.            |
 
 ## Diálogos (crear rama, eliminar rama, clonar, Preferencias)
 

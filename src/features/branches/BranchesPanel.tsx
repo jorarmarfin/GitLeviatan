@@ -102,9 +102,9 @@ export function BranchesPanel({ repository, selectedOid, externalVersion, onChan
               aria-current={branch.isCurrent ? "true" : undefined}
               title={branch.isCurrent ? "Rama actual" : `Cambiar a ${branch.name}`}
               onClick={() => void checkout(branch.name)}
-              className="flex min-w-0 flex-1 items-center gap-1 rounded px-2 py-1 text-left text-sm hover:bg-accent disabled:cursor-default aria-[current=true]:font-semibold aria-[current=true]:bg-accent"
+              className="flex min-w-0 flex-1 items-center gap-1 rounded px-2 py-1 text-left text-sm hover:bg-accent disabled:cursor-default aria-[current=true]:font-semibold aria-[current=true]:bg-selected"
             >
-              <span aria-hidden="true" className="w-3 shrink-0">
+              <span aria-hidden="true" className="w-3 shrink-0 text-primary">
                 {branch.isCurrent ? "●" : ""}
               </span>
               <span className="truncate">{branch.name}</span>

@@ -13,7 +13,9 @@ export function useChanges(
   const [status, setStatus] = useState<RepositoryStatus | null>(null);
   const [loadError, setLoadError] = useState<AppError | null>(null);
   const [busy, setBusy] = useState(false);
-  const [operationError, setOperationError] = useState<AppError | null>(null);
+  const [operationError, setOperationError] = useState<(AppError & { context: string }) | null>(
+    null,
+  );
 
   useEffect(() => {
     let current = true;
@@ -31,14 +33,14 @@ export function useChanges(
   }, [repository.id, version, externalVersion]);
 
   // Tras cada operación (con éxito o sin él) se vuelve a leer el estado real.
-  const run = useCallback(async (operation: () => Promise<unknown>) => {
+  const run = useCallback(async (operation: () => Promise<unknown>, context: string) => {
     setBusy(true);
     setOperationError(null);
     try {
       await operation();
       return true;
     } catch (e) {
-      setOperationError(toAppError(e));
+      setOperationError({ ...toAppError(e), context });
       return false;
     } finally {
       setBusy(false);
@@ -47,21 +49,45 @@ export function useChanges(
   }, []);
 
   const stage = useCallback(
-    (paths: string[]) => run(() => api.stageFiles(repository.id, paths)),
+    (paths: string[]) =>
+      run(() => api.stageFiles(repository.id, paths), "No se pudo preparar el archivo"),
     [repository.id, run],
   );
   const unstage = useCallback(
-    (paths: string[]) => run(() => api.unstageFiles(repository.id, paths)),
+    (paths: string[]) =>
+      run(() => api.unstageFiles(repository.id, paths), "No se pudo quitar de staged"),
+    [repository.id, run],
+  );
+  const stageAll = useCallback(
+    () => run(() => api.stageAll(repository.id), "No se pudo preparar todo"),
+    [repository.id, run],
+  );
+  const unstageAll = useCallback(
+    () => run(() => api.unstageAll(repository.id), "No se pudo quitar todo de staged"),
     [repository.id, run],
   );
   const commit = useCallback(
     async (message: string) => {
-      const ok = await run(() => api.createCommit(repository.id, message));
+      const ok = await run(
+        () => api.createCommit(repository.id, message),
+        "No se pudo crear el commit",
+      );
       if (ok) onCommitted();
       return ok;
     },
     [repository.id, run, onCommitted],
   );
 
-  return { status, loadError, busy, operationError, version, stage, unstage, commit };
+  return {
+    status,
+    loadError,
+    busy,
+    operationError,
+    version,
+    stage,
+    unstage,
+    stageAll,
+    unstageAll,
+    commit,
+  };
 }

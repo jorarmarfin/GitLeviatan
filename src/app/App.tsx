@@ -44,9 +44,9 @@ export function App() {
 
   return (
     <div className="flex h-screen flex-col">
-      <header className="flex items-center gap-4 border-b border-border px-4 py-2">
+      <header className="flex items-center gap-4 border-b border-t-2 border-border border-t-accent-git px-4 py-2">
         <img src={logo} alt="" className="size-8" />
-        <h1 className="text-lg font-semibold">GitLeviatán</h1>
+        <h1 className="text-lg font-semibold text-primary">GitLeviatán</h1>
         <span className="truncate text-sm text-muted-foreground" title={active?.path}>
           {active ? active.name : "Ningún repositorio abierto"}
         </span>

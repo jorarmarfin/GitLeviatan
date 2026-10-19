@@ -6,6 +6,7 @@ import { DiffViewer, type DiffSelection } from "@/features/diffs/DiffViewer";
 import { ErrorNotice } from "@/components/ErrorNotice";
 import type { ChangedFile, DiffScope, RepositoryRef, RepositoryStatus } from "@/types/git";
 
+import { CHANGE_TEXT, SECTION_DOT, type ChangeTone } from "./changeStyle";
 import { CommitBox } from "./CommitBox";
 import { useChanges } from "./useChanges";
 
@@ -18,6 +19,8 @@ type Props = {
 
 type FileRowProps = {
   file: ChangedFile;
+  /** Por defecto, el tipo del archivo; las filas sin seguimiento usan `untracked`. */
+  tone?: ChangeTone;
   scope: DiffScope;
   selected: boolean;
   disabled: boolean;
@@ -25,8 +28,9 @@ type FileRowProps = {
   onToggle: () => void;
 };
 
-function FileRow({ file, scope, selected, disabled, onSelect, onToggle }: FileRowProps) {
+function FileRow({ file, tone, scope, selected, disabled, onSelect, onToggle }: FileRowProps) {
   const label = file.origPath ? `${file.origPath} → ${file.path}` : file.path;
+  const type: ChangeTone = tone ?? file.kind;
   return (
     <li className="flex items-center gap-1">
       <button
@@ -34,9 +38,9 @@ function FileRow({ file, scope, selected, disabled, onSelect, onToggle }: FileRo
         onClick={onSelect}
         aria-pressed={selected}
         title={label}
-        className="flex min-w-0 flex-1 items-center gap-2 rounded px-1 py-0.5 text-left text-sm hover:bg-accent aria-pressed:bg-accent"
+        className="flex min-w-0 flex-1 items-center gap-2 rounded px-1 py-0.5 text-left text-sm hover:bg-accent aria-pressed:bg-selected"
       >
-        <span className="w-16 shrink-0 text-xs text-muted-foreground">{file.kind}</span>
+        <span className={`w-20 shrink-0 text-xs font-medium ${CHANGE_TEXT[type]}`}>{type}</span>
         <span className="truncate">{label}</span>
       </button>
       <Button
@@ -69,12 +73,42 @@ function UntrackedRow({
   return (
     <FileRow
       file={{ path, origPath: null, kind: "added" }}
+      tone="untracked"
       scope="unstaged"
       selected={selected}
       disabled={disabled}
       onSelect={onSelect}
       onToggle={onStage}
     />
+  );
+}
+
+/** Cabecera de sección: marca de color, título y el contador como etiqueta. */
+function SectionHeader({
+  tone,
+  title,
+  count,
+  children,
+}: {
+  tone: keyof typeof SECTION_DOT;
+  title: string;
+  count: number;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="mb-1 flex items-center justify-between gap-2">
+      <h3 className="flex items-center gap-2 text-xs font-semibold uppercase text-muted-foreground">
+        <span aria-hidden="true" className={`size-2 rounded-full ${SECTION_DOT[tone]}`} />
+        {title}
+        <span
+          aria-label={`${count} archivos`}
+          className="rounded-full bg-secondary px-1.5 py-0.5 text-[0.65rem] font-semibold normal-case text-secondary-foreground"
+        >
+          {count}
+        </span>
+      </h3>
+      {children}
+    </div>
   );
 }
 
@@ -87,11 +121,18 @@ function exists(status: RepositoryStatus, selection: DiffSelection): boolean {
 }
 
 export function ChangesPanel({ repository, onCommitted, externalVersion = 0 }: Props) {
-  const { status, loadError, busy, operationError, version, stage, unstage, commit } = useChanges(
-    repository,
-    onCommitted,
-    externalVersion,
-  );
+  const {
+    status,
+    loadError,
+    busy,
+    operationError,
+    version,
+    stage,
+    unstage,
+    stageAll,
+    unstageAll,
+    commit,
+  } = useChanges(repository, onCommitted, externalVersion);
   const [selection, setSelection] = useState<DiffSelection | null>(null);
 
   if (loadError) {
@@ -117,16 +158,40 @@ export function ChangesPanel({ repository, onCommitted, externalVersion = 0 }: P
     <div className="grid h-full min-h-0 grid-cols-[22rem_1fr]">
       <div className="flex min-h-0 flex-col border-r border-border">
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
-          <p className="mb-3 text-sm">
-            {status.detachedHead ? "HEAD desacoplado" : `Rama: ${status.branch ?? "—"}`}
-          </p>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <p className="text-sm">
+              {status.detachedHead ? "HEAD desacoplado" : `Rama: ${status.branch ?? "—"}`}
+            </p>
+            {status.unstaged.length + status.untracked.length > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                title="Equivale a git add -A"
+                onClick={() => void stageAll()}
+              >
+                <Plus aria-hidden="true" />
+                Preparar todo
+              </Button>
+            )}
+          </div>
           {clean && <p className="text-sm text-muted-foreground">Sin cambios.</p>}
 
           {status.staged.length > 0 && (
             <section aria-label="Staged" className="mb-4">
-              <h3 className="mb-1 text-xs font-semibold uppercase text-muted-foreground">
-                Staged ({status.staged.length})
-              </h3>
+              <SectionHeader tone="staged" title="Staged" count={status.staged.length}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 px-2 text-xs"
+                  disabled={busy}
+                  title="Quita todo de staged sin tocar tus archivos"
+                  onClick={() => void unstageAll()}
+                >
+                  <Minus aria-hidden="true" />
+                  Quitar todo
+                </Button>
+              </SectionHeader>
               <ul>
                 {status.staged.map((file) => (
                   <FileRow
@@ -145,9 +210,7 @@ export function ChangesPanel({ repository, onCommitted, externalVersion = 0 }: P
 
           {status.unstaged.length > 0 && (
             <section aria-label="Unstaged" className="mb-4">
-              <h3 className="mb-1 text-xs font-semibold uppercase text-muted-foreground">
-                Unstaged ({status.unstaged.length})
-              </h3>
+              <SectionHeader tone="unstaged" title="Unstaged" count={status.unstaged.length} />
               <ul>
                 {status.unstaged.map((file) => (
                   <FileRow
@@ -166,9 +229,11 @@ export function ChangesPanel({ repository, onCommitted, externalVersion = 0 }: P
 
           {status.untracked.length > 0 && (
             <section aria-label="Sin seguimiento">
-              <h3 className="mb-1 text-xs font-semibold uppercase text-muted-foreground">
-                Sin seguimiento ({status.untracked.length})
-              </h3>
+              <SectionHeader
+                tone="untracked"
+                title="Sin seguimiento"
+                count={status.untracked.length}
+              />
               <ul>
                 {status.untracked.map((path) => (
                   <UntrackedRow

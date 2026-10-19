@@ -69,6 +69,8 @@ export const api = {
     invoke<void>("stage_files", { repositoryId, paths }),
   unstageFiles: (repositoryId: string, paths: string[]) =>
     invoke<void>("unstage_files", { repositoryId, paths }),
+  stageAll: (repositoryId: string) => invoke<void>("stage_all", { repositoryId }),
+  unstageAll: (repositoryId: string) => invoke<void>("unstage_all", { repositoryId }),
   getDiff: (repositoryId: string, path: string, scope: DiffScope) =>
     invoke<FileDiff>("get_diff", { repositoryId, path, scope }),
   createCommit: (repositoryId: string, message: string) =>

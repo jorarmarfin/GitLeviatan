@@ -4,23 +4,35 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  /* Barras de desplazamiento y controles nativos acordes al tema. */
+  color-scheme: light;
+  --background: oklch(0.99 0.004 250);
+  --foreground: oklch(0.2 0.03 258);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.45 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --card-foreground: oklch(0.2 0.03 258);
+  --primary: oklch(0.5 0.19 255);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.95 0.015 250);
+  --secondary-foreground: oklch(0.25 0.03 258);
+  --muted: oklch(0.96 0.01 250);
+  --muted-foreground: oklch(0.45 0.03 255);
+  --accent: oklch(0.95 0.015 250);
+  --accent-foreground: oklch(0.2 0.03 258);
   --destructive: oklch(0.52 0.245 27.325);
   --destructive-foreground: oklch(1 0 0);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.55 0 0);
+  --border: oklch(0.9 0.012 250);
+  --input: oklch(0.9 0.012 250);
+  --ring: oklch(0.58 0.17 252);
+  /* Fila o elemento seleccionado: un velo del azul primario. */
+  --selected: oklch(0.92 0.045 245);
+  /* Naranja del logo (la «caja» de Git): acento puntual. */
+  --accent-git: oklch(0.55 0.19 38);
+  /* Tipo de cambio en la lista de archivos (siempre junto al texto). */
+  --change-added: oklch(0.48 0.14 150);
+  --change-modified: oklch(0.5 0.12 75);
+  --change-deleted: oklch(0.5 0.2 27);
+  --change-renamed: oklch(0.48 0.18 300);
+  --change-untracked: oklch(0.48 0.06 250);
   --radius: 0.625rem;
   --graph-0: oklch(0.55 0.2 260);
   --graph-1: oklch(0.6 0.19 145);
@@ -33,23 +45,31 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  color-scheme: dark;
+  --background: oklch(0.17 0.03 258);
+  --foreground: oklch(0.97 0.01 250);
+  --card: oklch(0.21 0.035 258);
+  --card-foreground: oklch(0.97 0.01 250);
+  --primary: oklch(0.7 0.16 245);
+  --primary-foreground: oklch(0.17 0.03 258);
+  --secondary: oklch(0.27 0.04 258);
+  --secondary-foreground: oklch(0.97 0.01 250);
+  --muted: oklch(0.27 0.04 258);
+  --muted-foreground: oklch(0.72 0.03 255);
+  --accent: oklch(0.27 0.04 258);
+  --accent-foreground: oklch(0.97 0.01 250);
   --destructive: oklch(0.704 0.191 22.216);
   --destructive-foreground: oklch(0.145 0 0);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --ring: oklch(0.7 0.16 245);
+  --selected: oklch(0.32 0.08 252);
+  --accent-git: oklch(0.72 0.18 40);
+  --change-added: oklch(0.78 0.16 150);
+  --change-modified: oklch(0.8 0.14 80);
+  --change-deleted: oklch(0.76 0.17 22);
+  --change-renamed: oklch(0.78 0.14 305);
+  --change-untracked: oklch(0.76 0.06 250);
   --graph-0: oklch(0.72 0.15 260);
   --graph-1: oklch(0.75 0.17 145);
   --graph-2: oklch(0.74 0.16 25);
@@ -78,6 +98,13 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-selected: var(--selected);
+  --color-accent-git: var(--accent-git);
+  --color-change-added: var(--change-added);
+  --color-change-modified: var(--change-modified);
+  --color-change-deleted: var(--change-deleted);
+  --color-change-renamed: var(--change-renamed);
+  --color-change-untracked: var(--change-untracked);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);

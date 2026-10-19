@@ -46,6 +46,20 @@ pub fn stage_files(repo: &Path, paths: &[String]) -> Result<(), AppError> {
     run_git(repo, args).map(|_| ())
 }
 
+/// Prepara todo el repositorio (`git add -A`): modificaciones, borrados y archivos nuevos, sin
+/// los ignorados. No lleva lista de rutas, así que no choca con el límite de longitud de la
+/// línea de comandos (unos 32 000 caracteres en Windows) por muchos archivos que haya.
+/// `repo` es siempre la raíz del repositorio (ver `resolve_toplevel`).
+pub fn stage_all(repo: &Path) -> Result<(), AppError> {
+    run_git(repo, ["add", "-A"]).map(|_| ())
+}
+
+/// Saca todo del área de preparación (`git reset -q`) sin tocar el working tree. Funciona
+/// también en un repositorio sin commits, donde deja los archivos como sin seguimiento.
+pub fn unstage_all(repo: &Path) -> Result<(), AppError> {
+    run_git(repo, ["reset", "-q"]).map(|_| ())
+}
+
 fn has_head(repo: &Path) -> bool {
     run_git(repo, ["rev-parse", "--verify", "--quiet", "HEAD"]).is_ok()
 }
@@ -298,5 +312,173 @@ mod tests {
             .unwrap()
             .commits
             .is_empty());
+    }
+
+    // --- preparar y quitar todo (SPEC 10) ---
+
+    /// Repositorio con una modificación, un borrado, archivos nuevos (también anidados y con
+    /// nombres especiales) y un archivo ignorado.
+    fn messy_repo() -> tempfile::TempDir {
+        let repo = init_repo();
+        commit_file(repo.path(), "modificar.txt", "antes\n", "base 1");
+        commit_file(repo.path(), "borrar.txt", "adiós\n", "base 2");
+        commit_file(repo.path(), ".gitignore", "*.log\n", "ignorar logs");
+
+        std::fs::write(repo.path().join("modificar.txt"), "después\n").unwrap();
+        std::fs::remove_file(repo.path().join("borrar.txt")).unwrap();
+        std::fs::create_dir_all(repo.path().join("a/b")).unwrap();
+        std::fs::write(repo.path().join("a/b/hondo.txt"), "x").unwrap();
+        for name in portable_names(&["con espacios.txt", "ñandú_日本.txt", "salto\nlinea.txt"])
+        {
+            std::fs::write(repo.path().join(name), "x").unwrap();
+        }
+        std::fs::write(repo.path().join("build.log"), "ruido").unwrap();
+        repo
+    }
+
+    fn cached_changes(repo: &Path) -> String {
+        let out = run_git(repo, ["diff", "--cached", "--name-status", "-z"]).unwrap();
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    }
+
+    #[test]
+    fn stage_all_matches_git_add_a_in_the_cli() {
+        let ours = messy_repo();
+        let cli = messy_repo();
+        stage_all(ours.path()).unwrap();
+        git(cli.path(), &["add", "-A"]);
+
+        assert_eq!(cached_changes(ours.path()), cached_changes(cli.path()));
+        assert!(!cached_changes(ours.path()).is_empty());
+
+        let s = get_status(ours.path()).unwrap();
+        assert!(s.unstaged.is_empty() && s.untracked.is_empty());
+        let deleted = s.staged.iter().find(|f| f.path == "borrar.txt").unwrap();
+        assert_eq!(deleted.kind, crate::git::types::ChangeKind::Deleted);
+        assert!(s.staged.iter().any(|f| f.path == "a/b/hondo.txt"));
+    }
+
+    #[test]
+    fn stage_all_skips_ignored_files() {
+        let repo = messy_repo();
+        stage_all(repo.path()).unwrap();
+        let s = get_status(repo.path()).unwrap();
+        assert!(!s.staged.iter().any(|f| f.path == "build.log"));
+        assert!(!s.untracked.contains(&"build.log".to_string()));
+    }
+
+    #[test]
+    fn stage_all_completes_a_partially_staged_state() {
+        let repo = messy_repo();
+        stage_files(repo.path(), &paths(&["modificar.txt"])).unwrap();
+        stage_all(repo.path()).unwrap();
+        let s = get_status(repo.path()).unwrap();
+        assert!(s.unstaged.is_empty() && s.untracked.is_empty());
+    }
+
+    #[test]
+    fn unstage_all_empties_the_index_and_keeps_the_working_tree() {
+        let repo = messy_repo();
+        stage_all(repo.path()).unwrap();
+        unstage_all(repo.path()).unwrap();
+
+        let s = get_status(repo.path()).unwrap();
+        assert!(s.staged.is_empty());
+        // Todo sigue en el disco, con su contenido.
+        assert_eq!(
+            std::fs::read_to_string(repo.path().join("modificar.txt")).unwrap(),
+            "después\n"
+        );
+        assert!(!repo.path().join("borrar.txt").exists());
+        assert!(repo.path().join("a/b/hondo.txt").exists());
+        assert!(s.unstaged.iter().any(|f| f.path == "modificar.txt"));
+        assert!(
+            s.untracked.contains(&"a/".to_string())
+                || s.untracked.iter().any(|p| p.starts_with("a/"))
+        );
+    }
+
+    #[test]
+    fn both_work_in_a_repository_without_commits() {
+        let repo = init_repo();
+        std::fs::write(repo.path().join("uno.txt"), "1").unwrap();
+        std::fs::write(repo.path().join("dos.txt"), "2").unwrap();
+
+        stage_all(repo.path()).unwrap();
+        assert_eq!(get_status(repo.path()).unwrap().staged.len(), 2);
+
+        unstage_all(repo.path()).unwrap();
+        let s = get_status(repo.path()).unwrap();
+        assert!(s.staged.is_empty());
+        assert_eq!(s.untracked.len(), 2);
+        assert!(repo.path().join("uno.txt").exists());
+    }
+
+    #[test]
+    fn nothing_to_do_is_not_an_error() {
+        let repo = init_repo();
+        commit_file(repo.path(), "a.txt", "a\n", "base");
+        stage_all(repo.path()).unwrap();
+        unstage_all(repo.path()).unwrap();
+        assert!(get_status(repo.path()).unwrap().staged.is_empty());
+    }
+
+    #[test]
+    fn stage_all_then_commit_leaves_a_clean_tree() {
+        let repo = messy_repo();
+        stage_all(repo.path()).unwrap();
+        create_commit(repo.path(), "todo junto").unwrap();
+        let s = get_status(repo.path()).unwrap();
+        assert!(s.staged.is_empty() && s.unstaged.is_empty() && s.untracked.is_empty());
+    }
+
+    #[test]
+    fn stage_all_with_autocrlf_does_not_leave_false_changes() {
+        let repo = init_repo();
+        git(repo.path(), &["config", "core.autocrlf", "true"]);
+        std::fs::write(repo.path().join("a.txt"), "uno\r\ndos\r\n").unwrap();
+        stage_all(repo.path()).unwrap();
+        create_commit(repo.path(), "con CRLF").unwrap();
+        let s = get_status(repo.path()).unwrap();
+        assert!(s.staged.is_empty() && s.unstaged.is_empty());
+    }
+
+    #[test]
+    fn failures_reach_the_caller_as_git_errors() {
+        // Carpeta que no es un repositorio: Git falla y el error llega saneado.
+        let dir = tempfile::tempdir().unwrap();
+        let err = stage_all(dir.path()).unwrap_err();
+        assert_eq!(err.kind, AppErrorKind::Git);
+        assert!(!err.message.is_empty());
+        assert!(unstage_all(dir.path()).is_err());
+    }
+
+    /// Miles de archivos nuevos: una sola orden, sin lista de rutas (SPEC 10, paso 4).
+    #[test]
+    fn handles_thousands_of_untracked_files() {
+        const TOTAL: usize = 4_000;
+        let repo = init_repo();
+        commit_file(repo.path(), "base.txt", "base\n", "base");
+        let dir = repo.path().join("muchos");
+        std::fs::create_dir(&dir).unwrap();
+        for i in 0..TOTAL {
+            // Nombres largos: una lista de rutas superaría con creces los 32 000 caracteres.
+            std::fs::write(
+                dir.join(format!("archivo_con_nombre_bastante_largo_{i:05}.txt")),
+                "x",
+            )
+            .unwrap();
+        }
+
+        stage_all(repo.path()).unwrap();
+        let s = get_status(repo.path()).unwrap();
+        assert_eq!(s.staged.len(), TOTAL);
+        assert!(s.untracked.is_empty());
+
+        unstage_all(repo.path()).unwrap();
+        let s = get_status(repo.path()).unwrap();
+        assert!(s.staged.is_empty());
+        assert!(!s.untracked.is_empty());
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), TOTAL);
     }
 }

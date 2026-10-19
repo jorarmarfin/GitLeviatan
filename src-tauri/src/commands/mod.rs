@@ -234,6 +234,26 @@ pub async fn unstage_files(
     blocking(move || write::unstage_files(&repo, &paths)).await
 }
 
+/// Prepara todo el repositorio (`git add -A`).
+#[tauri::command]
+pub async fn stage_all(
+    repositories: State<'_, Repositories>,
+    repository_id: String,
+) -> Result<(), AppError> {
+    let repo = repositories.path(&repository_id)?;
+    blocking(move || write::stage_all(&repo)).await
+}
+
+/// Quita todo de staged (`git reset -q`) sin tocar el working tree.
+#[tauri::command]
+pub async fn unstage_all(
+    repositories: State<'_, Repositories>,
+    repository_id: String,
+) -> Result<(), AppError> {
+    let repo = repositories.path(&repository_id)?;
+    blocking(move || write::unstage_all(&repo)).await
+}
+
 #[tauri::command]
 pub async fn get_diff(
     repositories: State<'_, Repositories>,
