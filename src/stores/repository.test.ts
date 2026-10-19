@@ -40,3 +40,13 @@ describe("repository store", () => {
     expect(state.error).toMatch(/no es un repositorio/);
   });
 });
+
+describe("adoptRepository", () => {
+  it("activa el repositorio y recarga los recientes", async () => {
+    vi.mocked(api.listRecentRepositories).mockResolvedValue([]);
+    const repo = { id: "repo-9", path: "/tmp/clon", name: "clon" };
+    await useRepositoryStore.getState().adoptRepository(repo);
+    expect(useRepositoryStore.getState().active).toEqual(repo);
+    expect(api.listRecentRepositories).toHaveBeenCalled();
+  });
+});

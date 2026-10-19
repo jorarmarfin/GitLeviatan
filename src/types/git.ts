@@ -45,3 +45,22 @@ export type CommitResult = { oid: string; shortOid: string };
 
 /** Error de una operación que modifica el repositorio, con el stderr de Git si lo hay. */
 export type OperationError = { message: string; detail: string | null };
+
+export type RemoteInfo = { name: string; fetchUrl: string; pushUrl: string };
+
+export type SyncPhase = "counting" | "receiving" | "resolving" | "sending" | "done";
+
+export type SyncProgress = { operationId: string; phase: SyncPhase; percent: number | null };
+
+export type SyncErrorKind =
+  | "auth"
+  | "network"
+  | "nonFastForward"
+  | "conflict"
+  | "permission"
+  | "remoteNotFound"
+  | "cancelled"
+  | "unknown";
+
+/** Fallo de fetch/pull/push/clone, ya clasificado por el backend. */
+export type SyncFailure = { kind: SyncErrorKind; message: string; detail: string | null };

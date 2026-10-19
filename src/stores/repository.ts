@@ -10,6 +10,8 @@ type RepositoryState = {
   error: string | null;
   loadRecents: () => Promise<void>;
   openRepository: (path: string) => Promise<void>;
+  /** Activa un repositorio ya registrado en el backend (p. ej. recién clonado). */
+  adoptRepository: (repository: RepositoryRef) => Promise<void>;
 };
 
 export const useRepositoryStore = create<RepositoryState>((set, get) => ({
@@ -36,5 +38,10 @@ export const useRepositoryStore = create<RepositoryState>((set, get) => ({
       // Un fallo no cambia el repositorio activo.
       set({ opening: false, error: errorMessage(error) });
     }
+  },
+
+  async adoptRepository(repository) {
+    set({ active: repository, error: null });
+    await get().loadRecents();
   },
 }));

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import logo from "@/assets/logo.png";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { OpenRepositoryButton } from "@/features/repositories/OpenRepositoryButton";
+import { CloneRepositoryButton } from "@/features/sync/CloneRepositoryButton";
 import { ping } from "@/lib/ping";
 import { Sidebar } from "@/app/Sidebar";
 import { Workspace } from "@/app/Workspace";
@@ -28,6 +29,7 @@ export function App() {
           {active ? active.name : "Ningún repositorio abierto"}
         </span>
         <div className="ml-auto flex items-center gap-3">
+          <CloneRepositoryButton />
           <OpenRepositoryButton />
           <ThemeToggle />
         </div>

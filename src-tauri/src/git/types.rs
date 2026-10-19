@@ -130,3 +130,30 @@ pub enum DeleteBranchOutcome {
     Deleted,
     NeedsForce { reason: DeleteReason },
 }
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteInfo {
+    pub name: String,
+    /// URLs sin credenciales incrustadas.
+    pub fetch_url: String,
+    pub push_url: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum SyncPhase {
+    Counting,
+    Receiving,
+    Resolving,
+    Sending,
+    Done,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncProgress {
+    pub operation_id: String,
+    pub phase: SyncPhase,
+    pub percent: Option<u8>,
+}

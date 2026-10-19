@@ -6,7 +6,10 @@ pub mod error;
 pub mod operations;
 pub mod parse;
 pub mod process;
+pub mod remotes;
 pub mod repository;
+pub mod sync;
+pub mod sync_error;
 pub mod types;
 pub mod write;
 
