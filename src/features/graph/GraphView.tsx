@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import type { KeyboardEvent, UIEvent } from "react";
+import type { KeyboardEvent, MouseEvent, UIEvent } from "react";
 
 import { cn } from "@/lib/utils";
 import type { CommitNode } from "@/types/git";
@@ -125,6 +125,8 @@ type Props = {
   onSelect: (oid: string) => void;
   /** Doble clic o Enter sobre un commit: abre sus archivos. */
   onOpen?: (oid: string) => void;
+  /** Clic derecho (o tecla de menú) sobre un commit; ya lo ha seleccionado. */
+  onContextMenu?: (oid: string, position: { x: number; y: number }) => void;
   hasMore: boolean;
   loadingMore: boolean;
   onLoadMore: () => void;
@@ -136,6 +138,7 @@ export function GraphView({
   selectedOid,
   onSelect,
   onOpen,
+  onContextMenu,
   hasMore,
   loadingMore,
   onLoadMore,
@@ -224,6 +227,26 @@ export function GraphView({
     }
   }
 
+  function handleContextMenu(event: MouseEvent<HTMLDivElement>) {
+    if (!onContextMenu) return;
+    event.preventDefault();
+    const row = (event.target as HTMLElement).closest<HTMLElement>('[role="option"]');
+    if (row) {
+      // Clic derecho: la fila bajo el puntero (el id es `graph-row-<oid>`).
+      const oid = row.id.slice("graph-row-".length);
+      onSelect(oid);
+      onContextMenu(oid, { x: event.clientX, y: event.clientY });
+      return;
+    }
+    // Tecla de menú o Mayús+F10: el menú sale junto a la fila seleccionada.
+    if (selectedOid === null) return;
+    const rect = document.getElementById(`graph-row-${selectedOid}`)?.getBoundingClientRect();
+    onContextMenu(selectedOid, {
+      x: rect ? rect.left + 48 : event.clientX,
+      y: rect ? rect.bottom : event.clientY,
+    });
+  }
+
   const visible = [];
   for (let i = start; i < end; i++) {
     visible.push(
@@ -249,6 +272,7 @@ export function GraphView({
       aria-activedescendant={selectedOid ? `graph-row-${selectedOid}` : undefined}
       onScroll={handleScroll}
       onKeyDown={handleKeyDown}
+      onContextMenu={handleContextMenu}
       className="h-full overflow-y-auto outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <div style={{ height: count * ROW_HEIGHT, position: "relative" }}>{visible}</div>

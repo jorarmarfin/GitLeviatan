@@ -28,10 +28,12 @@ function Harness({
   commits,
   onSelectSpy,
   onOpen,
+  onContextMenu,
 }: {
   commits: CommitNode[];
   onSelectSpy?: () => void;
   onOpen?: (oid: string) => void;
+  onContextMenu?: (oid: string, position: { x: number; y: number }) => void;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
   const { rows } = computeGraphRows(commits);
@@ -46,6 +48,7 @@ function Harness({
           setSelected(oid);
         }}
         onOpen={onOpen}
+        onContextMenu={onContextMenu}
         hasMore={false}
         loadingMore={false}
         onLoadMore={() => {}}
@@ -188,5 +191,36 @@ describe("GraphView", () => {
     await userEvent.click(screen.getByRole("option", { name: /Commit 3/ }));
     await userEvent.keyboard("{ArrowDown}");
     expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it("el clic derecho selecciona el commit y avisa con la posición del puntero", async () => {
+    const onContextMenu = vi.fn();
+    render(<Harness commits={makeCommits(5)} onContextMenu={onContextMenu} />);
+    await userEvent.pointer({
+      keys: "[MouseRight]",
+      target: screen.getByRole("option", { name: /Commit 3/ }),
+    });
+    expect(onContextMenu).toHaveBeenCalledTimes(1);
+    expect(onContextMenu).toHaveBeenCalledWith("oid3", expect.objectContaining({ x: 0, y: 0 }));
+    expect(screen.getByTestId("selected")).toHaveTextContent("oid3");
+  });
+
+  it("la tecla de menú abre el menú del commit seleccionado", async () => {
+    const onContextMenu = vi.fn();
+    render(<Harness commits={makeCommits(5)} onContextMenu={onContextMenu} />);
+    await userEvent.click(screen.getByRole("option", { name: /Commit 4/ }));
+    onContextMenu.mockClear();
+    // Con el teclado el evento llega al listbox, no a una fila.
+    screen
+      .getByRole("listbox")
+      .dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+    expect(onContextMenu).toHaveBeenCalledWith("oid4", expect.any(Object));
+  });
+
+  it("sin manejador no intercepta el menú del navegador", () => {
+    render(<Harness commits={makeCommits(3)} />);
+    const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+    screen.getByRole("option", { name: /Commit 2/ }).dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
   });
 });
