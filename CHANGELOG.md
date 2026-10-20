@@ -6,6 +6,12 @@ como notas de la versión.
 
 ## [Sin publicar]
 
+## [0.3.0] - 2026-10-19
+
+Tags y releases desde la app, ramas desde cualquier punto, y los archivos de cada commit. Los instaladores de
+Windows y macOS siguen **sin firmar** y su verificación manual en equipos reales sigue pendiente (ver
+`docs/platforms.md`).
+
 ### Añadido
 
 - **Archivos de un commit a pantalla completa:** doble clic (o `Enter`) sobre un commit abre una vista con la

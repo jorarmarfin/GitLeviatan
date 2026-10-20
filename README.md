@@ -7,7 +7,7 @@
 
 Licencia / License: [GPL-3.0-or-later](LICENSE)
 
-> Estado / Status: v0.2.0: Ubuntu verificado; Windows y macOS compilan y pasan los tests en CI, verificación manual pendiente. / v0.2.0: Ubuntu verified; Windows and macOS build and pass tests in CI, manual verification pending.
+> Estado / Status: v0.3.0: Ubuntu verificado; Windows y macOS compilan y pasan los tests en CI, verificación manual pendiente. / v0.3.0: Ubuntu verified; Windows and macOS build and pass tests in CI, manual verification pending.
 > Ver el [CHANGELOG](CHANGELOG.md). / See the [CHANGELOG](CHANGELOG.md).
 
 ---
