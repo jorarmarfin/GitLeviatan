@@ -300,6 +300,16 @@ where
     if !dir.is_dir() {
         return Err(AppError::not_found(dir));
     }
+    // Cancelada antes de arrancar: ni siquiera se lanza Git. Matar un proceso recién creado no es
+    // fiable (en Windows puede dejar huérfanos los procesos nietos con los pipes abiertos).
+    if operation.is_cancelled() {
+        return Ok(StreamOutput {
+            success: false,
+            cancelled: true,
+            stdout: Vec::new(),
+            stderr: String::new(),
+        });
+    }
 
     let mut command = git_command();
     #[cfg(unix)]
@@ -327,7 +337,7 @@ where
 
     {
         let mut slot = operation.child.lock().expect("operación envenenada");
-        // Cancelada antes de arrancar: no hay nada que esperar.
+        // Cancelada justo después del chequeo anterior (carrera estrecha): se mata lo ya arrancado.
         if operation.is_cancelled() {
             kill_tree(&mut child);
         }
@@ -573,6 +583,8 @@ mod tests {
         )
         .unwrap();
         assert!(out.cancelled && !out.success);
-        assert!(started.elapsed() < std::time::Duration::from_secs(10));
+        // No llega a lanzar Git: no hay salida y el retorno es inmediato, no «antes de 10 s».
+        assert!(out.stdout.is_empty() && out.stderr.is_empty());
+        assert!(started.elapsed() < std::time::Duration::from_secs(1));
     }
 }
