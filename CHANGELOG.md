@@ -14,6 +14,9 @@ Windows y macOS siguen **sin firmar** y su verificación manual en equipos reale
 
 ### Añadido
 
+- **Menú contextual en los commits del historial** (clic derecho, o la tecla de menú / `Mayús+F10`): Ver
+  archivos del commit, Crear rama aquí, Crear tag aquí y Copiar el identificador (oid). El clic derecho también
+  selecciona el commit (SPEC 14).
 - **Archivos de un commit a pantalla completa:** doble clic (o `Enter`) sobre un commit abre una vista con la
   lista desplazable de sus archivos modificados (estado, ruta, `+X −Y`, renombrados con su ruta original), un
   filtro por nombre y el diff de cada archivo. Las fusiones se comparan con el primer padre, el commit raíz
@@ -60,6 +63,11 @@ Windows y macOS siguen **sin firmar** y su verificación manual en equipos reale
 - Los diálogos devuelven el foco al botón que los abrió aunque su contenido use `autoFocus`, y ya no lo mueven cuando
   el padre se vuelve a renderizar.
 - Se elimina el `ping: pong` del pie y el comando `ping`, restos de la SPEC 01.
+
+### Corregido
+
+- Una operación de red cancelada antes de arrancar ya no lanza Git. En Windows el proceso recién creado podía
+  dejar huérfano a un proceso nieto con el pipe abierto y colgar la prueba de cancelación.
 
 ## [0.2.0] - 2026-10-19
 
