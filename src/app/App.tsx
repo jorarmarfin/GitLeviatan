@@ -81,7 +81,7 @@ export function App() {
         </div>
       )}
 
-      <div className="grid min-h-0 flex-1 grid-cols-[14rem_1fr]">
+      <div className="relative grid min-h-0 flex-1 grid-cols-[14rem_1fr]">
         {git && !git.available ? (
           <GitMissingScreen
             message={git.message}

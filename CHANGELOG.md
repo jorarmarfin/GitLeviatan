@@ -8,6 +8,11 @@ como notas de la versión.
 
 ### Añadido
 
+- **Archivos de un commit a pantalla completa:** doble clic (o `Enter`) sobre un commit abre una vista con la
+  lista desplazable de sus archivos modificados (estado, ruta, `+X −Y`, renombrados con su ruta original), un
+  filtro por nombre y el diff de cada archivo. Las fusiones se comparan con el primer padre, el commit raíz
+  muestra todo como añadido y se listan como mucho 500 archivos, avisando del total. **Volver al historial** (o
+  `Esc`) devuelve al grafo con su scroll y selección intactos (SPEC 14).
 - **Menú contextual de ramas** (clic derecho, o la tecla de menú con el foco en la rama): Fusionar en la rama
   actual, Cambiar a esta rama, Crear rama desde aquí y Eliminar rama. Funciona también sobre la rama actual,
   donde las acciones que no aplican salen deshabilitadas. El botón de fusionar de cada rama ahora muestra el

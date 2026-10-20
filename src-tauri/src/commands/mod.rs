@@ -6,6 +6,7 @@ use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::git::branches;
+use crate::git::commit_files;
 use crate::git::diff;
 use crate::git::error::AppError;
 use crate::git::operations;
@@ -15,9 +16,9 @@ use crate::git::repository::{self, Repositories};
 use crate::git::sync::{self, Operations, SyncContext};
 use crate::git::tags;
 use crate::git::types::{
-    BranchInfo, CommitDetail, CommitPage, CommitResult, DeleteBranchOutcome, DiffScope, FileDiff,
-    MergePreview, MergeResult, RecentRepository, ReleaseSuggestion, RemoteInfo, RemoteTag,
-    RepositoryRef, RepositoryStatus, SyncProgress, TagInfo,
+    BranchInfo, CommitDetail, CommitFiles, CommitPage, CommitResult, DeleteBranchOutcome,
+    DiffScope, FileDiff, MergePreview, MergeResult, RecentRepository, ReleaseSuggestion,
+    RemoteInfo, RemoteTag, RepositoryRef, RepositoryStatus, SyncProgress, TagInfo,
 };
 use crate::git::write;
 use crate::storage::recent::RecentStore;
@@ -308,6 +309,31 @@ pub async fn get_diff(
 ) -> Result<FileDiff, AppError> {
     let repo = repositories.path(&repository_id)?;
     blocking(move || diff::get_diff(&repo, &path, scope)).await
+}
+
+/// Archivos que modificó un commit respecto a su primer padre (como mucho 500).
+#[tauri::command]
+pub async fn list_commit_files(
+    repositories: State<'_, Repositories>,
+    repository_id: String,
+    oid: String,
+) -> Result<CommitFiles, AppError> {
+    let repo = repositories.path(&repository_id)?;
+    blocking(move || commit_files::list_commit_files(&repo, &oid)).await
+}
+
+/// Diff de un archivo de un commit: su versión en el primer padre contra la del commit.
+#[tauri::command]
+pub async fn get_commit_file_diff(
+    repositories: State<'_, Repositories>,
+    repository_id: String,
+    oid: String,
+    path: String,
+    orig_path: Option<String>,
+) -> Result<FileDiff, AppError> {
+    let repo = repositories.path(&repository_id)?;
+    blocking(move || commit_files::get_commit_file_diff(&repo, &oid, &path, orig_path.as_deref()))
+        .await
 }
 
 #[tauri::command]

@@ -21,10 +21,12 @@ type Props = {
   repository: RepositoryRef;
   selectedOid: string | null;
   onSelect: (oid: string) => void;
+  /** Doble clic o Enter sobre un commit: abre sus archivos. */
+  onOpen?: (oid: string) => void;
 };
 
 // Se remonta (prop `key`) al cambiar de repositorio: el estado inicial ya es "cargando".
-export function GraphPanel({ repository, selectedOid, onSelect }: Props) {
+export function GraphPanel({ repository, selectedOid, onSelect, onOpen }: Props) {
   const [data, setData] = useState<Data | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<AppError | null>(null);
@@ -86,6 +88,7 @@ export function GraphPanel({ repository, selectedOid, onSelect }: Props) {
       rows={data.rows}
       selectedOid={selectedOid}
       onSelect={onSelect}
+      onOpen={onOpen}
       hasMore={nextCursor !== null}
       loadingMore={loadingMore}
       onLoadMore={loadMore}

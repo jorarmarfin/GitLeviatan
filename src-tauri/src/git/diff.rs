@@ -126,20 +126,15 @@ fn looks_binary(bytes: &[u8]) -> bool {
     bytes.iter().take(BINARY_SNIFF_BYTES).any(|b| *b == 0)
 }
 
-pub fn get_diff(repo: &Path, path: &str, scope: DiffScope) -> Result<FileDiff, AppError> {
-    validate_relative_path(path)?;
-
-    let (original, modified) = match scope {
-        DiffScope::Staged => (
-            read_blob(repo, &format!("HEAD:{path}"))?,
-            read_blob(repo, &format!(":{path}"))?,
-        ),
-        DiffScope::Unstaged => (
-            read_blob(repo, &format!(":{path}"))?,
-            read_worktree(repo, path)?,
-        ),
-    };
-
+/// Arma el `FileDiff` a partir de las dos versiones: aplica el límite de tamaño y la detección de
+/// binarios. `align_crlf` solo se usa con el working tree (ver `autocrlf_converts`).
+fn build_diff(
+    repo: &Path,
+    path: &str,
+    original: Side,
+    modified: Side,
+    align_crlf: bool,
+) -> FileDiff {
     let too_large = [&original, &modified]
         .iter()
         .any(|side| matches!(side, Side::Present { size, .. } if *size > MAX_DIFF_BYTES));
@@ -157,21 +152,60 @@ pub fn get_diff(repo: &Path, path: &str, scope: DiffScope) -> Result<FileDiff, A
         too_large,
     };
     if too_large {
-        return Ok(diff);
+        return diff;
     }
     let (original, modified) = (original.unwrap_or_default(), modified.unwrap_or_default());
     if looks_binary(&original) || looks_binary(&modified) {
         diff.is_binary = true;
-        return Ok(diff);
+        return diff;
     }
-    let modified = if scope == DiffScope::Unstaged && autocrlf_converts(repo) {
+    let modified = if align_crlf && autocrlf_converts(repo) {
         align_line_endings(&original, modified)
     } else {
         modified
     };
     diff.original = String::from_utf8_lossy(&original).into_owned();
     diff.modified = String::from_utf8_lossy(&modified).into_owned();
-    Ok(diff)
+    diff
+}
+
+pub fn get_diff(repo: &Path, path: &str, scope: DiffScope) -> Result<FileDiff, AppError> {
+    validate_relative_path(path)?;
+
+    let (original, modified) = match scope {
+        DiffScope::Staged => (
+            read_blob(repo, &format!("HEAD:{path}"))?,
+            read_blob(repo, &format!(":{path}"))?,
+        ),
+        DiffScope::Unstaged => (
+            read_blob(repo, &format!(":{path}"))?,
+            read_worktree(repo, path)?,
+        ),
+    };
+    Ok(build_diff(
+        repo,
+        path,
+        original,
+        modified,
+        scope == DiffScope::Unstaged,
+    ))
+}
+
+/// Diff de un archivo entre dos revisiones: `original` es una revisión con ruta (`<padre>:<ruta>`)
+/// o `None` si no existe (commit raíz), y `modified` la del commit (`<oid>:<ruta>`). Un archivo
+/// ausente en un lado se ve como contenido vacío.
+pub(super) fn diff_between(
+    repo: &Path,
+    path: &str,
+    original_spec: Option<&str>,
+    modified_spec: &str,
+) -> Result<FileDiff, AppError> {
+    let original = match original_spec {
+        Some(spec) => read_blob(repo, spec)?,
+        None => Side::Missing,
+    };
+    let modified = read_blob(repo, modified_spec)?;
+    Ok(build_diff(repo, path, original, modified, false))
 }
 
 #[cfg(test)]

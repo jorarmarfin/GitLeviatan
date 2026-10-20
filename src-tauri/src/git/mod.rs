@@ -1,6 +1,7 @@
 //! Servicio Git: procesos, parseo y operaciones de alto nivel.
 
 pub mod branches;
+pub mod commit_files;
 pub mod diff;
 pub mod error;
 pub mod operations;

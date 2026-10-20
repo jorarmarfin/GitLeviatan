@@ -24,7 +24,15 @@ function makeCommits(total: number): CommitNode[] {
   return commits;
 }
 
-function Harness({ commits, onSelectSpy }: { commits: CommitNode[]; onSelectSpy?: () => void }) {
+function Harness({
+  commits,
+  onSelectSpy,
+  onOpen,
+}: {
+  commits: CommitNode[];
+  onSelectSpy?: () => void;
+  onOpen?: (oid: string) => void;
+}) {
   const [selected, setSelected] = useState<string | null>(null);
   const { rows } = computeGraphRows(commits);
   return (
@@ -37,6 +45,7 @@ function Harness({ commits, onSelectSpy }: { commits: CommitNode[]; onSelectSpy?
           onSelectSpy?.();
           setSelected(oid);
         }}
+        onOpen={onOpen}
         hasMore={false}
         loadingMore={false}
         onLoadMore={() => {}}
@@ -152,5 +161,32 @@ describe("GraphView", () => {
     const merge = screen.getByRole("option", { name: /Merge/ });
     expect(merge.querySelectorAll("svg path")).toHaveLength(2);
     expect(merge.querySelectorAll("svg circle")).toHaveLength(1);
+  });
+
+  it("el doble clic abre los archivos del commit", async () => {
+    const onOpen = vi.fn();
+    render(<Harness commits={makeCommits(5)} onOpen={onOpen} />);
+    await userEvent.dblClick(screen.getByRole("option", { name: /Commit 4/ }));
+    expect(onOpen).toHaveBeenCalledWith("oid4");
+    expect(screen.getByTestId("selected")).toHaveTextContent("oid4");
+  });
+
+  it("Enter abre los archivos del commit seleccionado y no hace nada sin selección", async () => {
+    const onOpen = vi.fn();
+    render(<Harness commits={makeCommits(5)} onOpen={onOpen} />);
+    await userEvent.click(screen.getByRole("listbox"));
+    await userEvent.keyboard("{Enter}");
+    expect(onOpen).not.toHaveBeenCalled();
+    await userEvent.keyboard("{ArrowDown}{Enter}");
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    expect(onOpen).toHaveBeenCalledWith(screen.getByTestId("selected").textContent);
+  });
+
+  it("el clic simple y las flechas no abren nada", async () => {
+    const onOpen = vi.fn();
+    render(<Harness commits={makeCommits(5)} onOpen={onOpen} />);
+    await userEvent.click(screen.getByRole("option", { name: /Commit 3/ }));
+    await userEvent.keyboard("{ArrowDown}");
+    expect(onOpen).not.toHaveBeenCalled();
   });
 });

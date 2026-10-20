@@ -43,6 +43,7 @@ type RowProps = {
   selected: boolean;
   graphWidth: number;
   onSelect: (oid: string) => void;
+  onOpen?: (oid: string) => void;
 };
 
 const GraphRowView = memo(function GraphRowView({
@@ -52,6 +53,7 @@ const GraphRowView = memo(function GraphRowView({
   selected,
   graphWidth,
   onSelect,
+  onOpen,
 }: RowProps) {
   const labels = parseRefs(commit.refs);
   const isMerge = commit.parents.length > 1;
@@ -62,6 +64,7 @@ const GraphRowView = memo(function GraphRowView({
       aria-selected={selected}
       aria-label={`${commit.subject}, ${commit.author}${isMerge ? ", merge" : ""}`}
       onClick={() => onSelect(commit.oid)}
+      onDoubleClick={() => onOpen?.(commit.oid)}
       style={{ position: "absolute", top, left: 0, right: 0, height: ROW_HEIGHT }}
       className={cn(
         "flex cursor-pointer items-center gap-2 px-2 text-sm hover:bg-accent/60",
@@ -120,6 +123,8 @@ type Props = {
   rows: GraphRow[];
   selectedOid: string | null;
   onSelect: (oid: string) => void;
+  /** Doble clic o Enter sobre un commit: abre sus archivos. */
+  onOpen?: (oid: string) => void;
   hasMore: boolean;
   loadingMore: boolean;
   onLoadMore: () => void;
@@ -130,6 +135,7 @@ export function GraphView({
   rows,
   selectedOid,
   onSelect,
+  onOpen,
   hasMore,
   loadingMore,
   onLoadMore,
@@ -184,6 +190,12 @@ export function GraphView({
     const page = Math.max(1, Math.floor(viewport / ROW_HEIGHT) - 1);
     let next: number;
     switch (event.key) {
+      case "Enter":
+        if (selectedOid !== null && onOpen) {
+          event.preventDefault();
+          onOpen(selectedOid);
+        }
+        return;
       case "ArrowDown":
         next = Math.min(count - 1, selectedIndex + 1);
         break;
@@ -223,6 +235,7 @@ export function GraphView({
         selected={i === selectedIndex}
         graphWidth={graphWidth}
         onSelect={onSelect}
+        onOpen={onOpen}
       />,
     );
   }

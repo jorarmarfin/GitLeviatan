@@ -9,6 +9,7 @@ import type {
 import type { CommitDetail } from "@/features/graph/types";
 import type { ReleaseSuggestion, RemoteTag, TagInfo } from "@/features/tags/types";
 import type {
+  CommitFiles,
   CommitPage,
   CommitResult,
   DiffScope,
@@ -82,6 +83,10 @@ export const api = {
   unstageAll: (repositoryId: string) => invoke<void>("unstage_all", { repositoryId }),
   getDiff: (repositoryId: string, path: string, scope: DiffScope) =>
     invoke<FileDiff>("get_diff", { repositoryId, path, scope }),
+  listCommitFiles: (repositoryId: string, oid: string) =>
+    invoke<CommitFiles>("list_commit_files", { repositoryId, oid }),
+  getCommitFileDiff: (repositoryId: string, oid: string, path: string, origPath: string | null) =>
+    invoke<FileDiff>("get_commit_file_diff", { repositoryId, oid, path, origPath }),
   createCommit: (repositoryId: string, message: string) =>
     invoke<CommitResult>("create_commit", { repositoryId, message }),
   listBranches: (repositoryId: string) => invoke<BranchInfo[]>("list_branches", { repositoryId }),

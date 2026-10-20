@@ -20,12 +20,23 @@ Los atajos globales se ignoran mientras hay un diálogo abierto.
 
 La lista tiene el foco con `Alt+2` (o con `Tab`). La selección sigue al foco y abre el detalle del commit.
 
-| Atajo               | Acción                       |
-| ------------------- | ---------------------------- |
-| `↓` / `↑`           | Commit siguiente / anterior. |
-| `Re Pág` / `Av Pág` | Subir / bajar una página.    |
-| `Inicio`            | Primer commit.               |
-| `Fin`               | Último commit cargado.       |
+| Atajo               | Acción                                                         |
+| ------------------- | -------------------------------------------------------------- |
+| `↓` / `↑`           | Commit siguiente / anterior.                                   |
+| `Re Pág` / `Av Pág` | Subir / bajar una página.                                      |
+| `Inicio`            | Primer commit.                                                 |
+| `Fin`               | Último commit cargado.                                         |
+| `Enter`             | Abre los archivos del commit seleccionado a pantalla completa. |
+| Doble clic          | Lo mismo, sobre cualquier commit.                              |
+
+## Archivos de un commit (pantalla completa)
+
+| Atajo                              | Acción                                                                                         |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `Esc` o **Volver al historial**    | Vuelve al historial con el scroll y la selección intactos; el foco regresa a la lista.         |
+| `Tab`                              | Recorre Volver, el filtro, la lista de archivos y el visor de diff. El foco empieza en Volver. |
+| `↓` / `↑` en la lista de archivos  | Pasan al archivo siguiente / anterior y muestran su diff.                                      |
+| Escribir en **Filtrar por nombre** | Reduce la lista a las rutas que contienen el texto (sin distinguir mayúsculas).                |
 
 ## Cambios y commit
 

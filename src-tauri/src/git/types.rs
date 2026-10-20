@@ -243,3 +243,40 @@ pub struct ReleaseSuggestion {
     pub commits_since_last_tag: Vec<ReleaseCommit>,
     pub behind_upstream: u32,
 }
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum CommitFileStatus {
+    Added,
+    Modified,
+    Deleted,
+    Renamed,
+    Copied,
+    Typechange,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CommitFile {
+    pub path: String,
+    /// Solo renombrados y copiados.
+    pub orig_path: Option<String>,
+    pub status: CommitFileStatus,
+    /// `None` en binarios.
+    pub additions: Option<u32>,
+    pub deletions: Option<u32>,
+    pub is_binary: bool,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CommitFiles {
+    pub oid: String,
+    /// Primer padre; `None` en el commit raíz.
+    pub compared_with: Option<String>,
+    pub is_merge: bool,
+    /// Total real, aunque `files` esté recortado.
+    pub total_files: usize,
+    pub truncated: bool,
+    pub files: Vec<CommitFile>,
+}

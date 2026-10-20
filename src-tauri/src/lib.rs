@@ -26,6 +26,8 @@ pub fn run() {
             commands::stage_all,
             commands::unstage_all,
             commands::get_diff,
+            commands::list_commit_files,
+            commands::get_commit_file_diff,
             commands::create_commit,
             commands::list_branches,
             commands::create_branch,

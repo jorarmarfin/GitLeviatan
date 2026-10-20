@@ -47,6 +47,28 @@ export type FileDiff = {
   tooLarge: boolean; // > 1 MiB: no se envía contenido
 };
 
+export type CommitFileStatus =
+  "added" | "modified" | "deleted" | "renamed" | "copied" | "typechange";
+
+export type CommitFile = {
+  path: string; // ruta en el commit (en eliminados, la que tenía)
+  origPath: string | null; // solo renombrados y copiados
+  status: CommitFileStatus;
+  additions: number | null; // null en binarios
+  deletions: number | null;
+  isBinary: boolean;
+};
+
+/** Archivos de un commit respecto a su primer padre (como mucho 500). */
+export type CommitFiles = {
+  oid: string;
+  comparedWith: string | null; // primer padre; null en el commit raíz
+  isMerge: boolean;
+  totalFiles: number; // total real, aunque `files` esté recortado
+  truncated: boolean;
+  files: CommitFile[];
+};
+
 export type CommitResult = { oid: string; shortOid: string };
 
 /** Error de una operación que modifica el repositorio, con el stderr de Git si lo hay. */
