@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 
 import { Sidebar } from "@/app/Sidebar";
 import { BranchesPanel } from "@/features/branches/BranchesPanel";
+import { ContextMenu } from "@/components/ui/context-menu";
 import { CreateBranchDialog } from "@/features/branches/CreateBranchDialog";
 import { CommitDetailPanel } from "@/features/commits/CommitDetailPanel";
 import { CommitFilesView } from "@/features/commits/CommitFilesView";
@@ -33,6 +34,9 @@ export function Workspace({ repository }: { repository: RepositoryRef }) {
     // El historial sigue montado debajo (conserva scroll y selección): solo hay que devolverle el foco.
     requestAnimationFrame(() => focusArea("graph"));
   }, []);
+  // Menú de clic derecho sobre un commit del historial.
+  const [commitMenu, setCommitMenu] = useState<{ oid: string; x: number; y: number } | null>(null);
+  const closeCommitMenu = useCallback(() => setCommitMenu(null), []);
   const handleCommitted = useCallback(() => {
     setSelectedOid(null);
     refresh();
@@ -67,6 +71,7 @@ export function Workspace({ repository }: { repository: RepositoryRef }) {
                 selectedOid={selectedOid}
                 onSelect={setSelectedOid}
                 onOpen={setFilesOid}
+                onContextMenu={(oid, { x, y }) => setCommitMenu({ oid, x, y })}
               />
             </main>
             <aside
@@ -101,6 +106,30 @@ export function Workspace({ repository }: { repository: RepositoryRef }) {
           </section>
         </div>
       </div>
+      {commitMenu && (
+        <ContextMenu
+          x={commitMenu.x}
+          y={commitMenu.y}
+          label={`Acciones del commit ${commitMenu.oid.slice(0, 7)}`}
+          onClose={closeCommitMenu}
+          items={[
+            { label: "Ver archivos del commit", onSelect: () => setFilesOid(commitMenu.oid) },
+            {
+              label: "Crear rama aquí…",
+              onSelect: () => setCommitDialog({ type: "branch", oid: commitMenu.oid }),
+            },
+            {
+              label: "Crear tag aquí…",
+              onSelect: () => setCommitDialog({ type: "tag", oid: commitMenu.oid }),
+            },
+            {
+              label: "Copiar identificador (oid)",
+              onSelect: () =>
+                void navigator.clipboard?.writeText(commitMenu.oid).catch(() => undefined),
+            },
+          ]}
+        />
+      )}
       {filesOid !== null && (
         <CommitFilesView
           repository={repository}

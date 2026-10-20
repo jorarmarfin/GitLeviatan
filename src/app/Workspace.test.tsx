@@ -140,4 +140,76 @@ describe("archivos de un commit", () => {
       expect(screen.queryByRole("region", { name: "Archivos del commit" })).toBeNull(),
     );
   });
+
+  describe("menú contextual de un commit", () => {
+    async function openMenu() {
+      const row = await renderWorkspace();
+      await userEvent.pointer({ keys: "[MouseRight]", target: row });
+      return screen.getByRole("menu", { name: /Acciones del commit oid2/ });
+    }
+
+    it("el clic derecho selecciona el commit y ofrece las acciones", async () => {
+      const menu = await openMenu();
+      expect(screen.getByRole("option", { name: /Commit 2/ })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      expect(
+        within(menu)
+          .getAllByRole("menuitem")
+          .map((i) => i.textContent),
+      ).toEqual([
+        "Ver archivos del commit",
+        "Crear rama aquí…",
+        "Crear tag aquí…",
+        "Copiar identificador (oid)",
+      ]);
+    });
+
+    it("«Ver archivos del commit» abre la vista a pantalla completa", async () => {
+      const menu = await openMenu();
+      await userEvent.click(
+        within(menu).getByRole("menuitem", { name: "Ver archivos del commit" }),
+      );
+      expect(
+        await screen.findByRole("region", { name: "Archivos del commit" }),
+      ).toBeInTheDocument();
+      expect(api.listCommitFiles).toHaveBeenCalledWith("repo-1", "oid2");
+    });
+
+    it("«Crear rama aquí…» y «Crear tag aquí…» abren el diálogo con ese commit elegido", async () => {
+      let menu = await openMenu();
+      await userEvent.click(within(menu).getByRole("menuitem", { name: "Crear rama aquí…" }));
+      let dialog = await screen.findByRole("dialog", { name: "Crear rama" });
+      expect(within(dialog).getByLabelText(/Desde el commit seleccionado \(oid2\)/)).toBeChecked();
+      await userEvent.keyboard("{Escape}");
+
+      await userEvent.pointer({
+        keys: "[MouseRight]",
+        target: screen.getByRole("option", { name: /Commit 2/ }),
+      });
+      menu = screen.getByRole("menu");
+      await userEvent.click(within(menu).getByRole("menuitem", { name: "Crear tag aquí…" }));
+      dialog = await screen.findByRole("dialog", { name: "Crear tag" });
+      expect(within(dialog).getByLabelText(/Desde el commit seleccionado \(oid2\)/)).toBeChecked();
+    });
+
+    it("«Copiar identificador» copia el oid al portapapeles", async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+      const menu = await openMenu();
+      await userEvent.click(
+        within(menu).getByRole("menuitem", { name: "Copiar identificador (oid)" }),
+      );
+      expect(writeText).toHaveBeenCalledWith("oid2");
+      expect(screen.queryByRole("menu")).toBeNull();
+    });
+
+    it("Escape cierra el menú sin hacer nada", async () => {
+      await openMenu();
+      await userEvent.keyboard("{Escape}");
+      expect(screen.queryByRole("menu")).toBeNull();
+      expect(api.listCommitFiles).not.toHaveBeenCalled();
+    });
+  });
 });
